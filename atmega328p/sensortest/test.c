@@ -20,7 +20,7 @@ int run=1;
 
 // Introductory messages.  The "PROGMEM" identifier 
 // causes the data to go into program space.
-const char hello[] PROGMEM = " NYU/CBLL";
+const char hello[] PROGMEM = "Stone\nDady";
 
 // Data for generating the characters used in load_custom_characters
 // and display_readings.  By reading levels[] starting at various
@@ -82,85 +82,70 @@ void update_bounds(const unsigned int *s, unsigned int *minv, unsigned int *maxv
 	}
 }
 
-// Make a little dance: Turn left and right
-void dance() {
-	int counter;
-	for(counter=0;counter<80;counter++)	{
-		if(counter < 20 || counter >= 60)
-			set_motors(speed, speed*-1);
-		else
-			set_motors(speed*-1,speed);
-		// Since our counter runs to 80, the total delay will be
-		// 80*20 = 1600 ms.
-		delay_ms(20);
-	}
-	set_motors(0,0);
-}
-
 //Calibrates the sensor
 void calibrate(unsigned int *sensors, unsigned int *minv, unsigned int *maxv) {
 	//give instructions
 	clear();
-	lcd_goto_xy(0,0);
+	lcd_goto_xy(0, 0);
 	print("A-Cal");
-	lcd_goto_xy(0,1);
+	lcd_goto_xy(0, 1);
 	print("C-Go");
 	
 	//and do some stuff for calibration
 	while (1) {
 		//C breaks the calibration and goes into running
 		if (button_is_pressed(BUTTON_C)) break;
+		
+		//A recalibrates all the sensors
 		if (button_is_pressed(BUTTON_A)) {
+			//give the user time to move his hand away
+			delay_ms(500);
+			
+			//activate the motors
 			set_motors(40, -40);
 			
+			//take 20 readings from the sensors, that should be enough to calibrate
 			int i;
 			for (i = 0; i < 20; i++) {
 				read_line_sensors(sensors, IR_EMITTERS_ON);
 				update_bounds(sensors, minv, maxv);
-				display_bars(sensors, minv, maxv);
-				lcd_goto_xy(0, 0);
-				print_long(sensors[2]);
-				delay_ms(100);
 			}
 			
+			//and turn the motors off, we're done
 			set_motors(0, 0);
 		}
-		
-		read_line_sensors(sensors, IR_EMITTERS_ON);
-		display_bars(sensors, minv, maxv);
-		lcd_goto_xy(0, 0);
-		print_hex(sensors[2]);
 	}
 }
 
 // Initializes the 3pi, displays a welcome message, calibrates, and
 // plays the initial music.
 void initialize() {
-	// This must be called at the beginning of 3pi code, to set up the
-	// sensors.  We use a value of 2000 for the timeout, which
-	// corresponds to 2000*0.4 us = 0.8 ms on our 20 MHz processor.
+	//This must be called at the beginning of 3pi code, to set up the
+	//sensors.  We use a value of 2000 for the timeout, which
+	//corresponds to 2000*0.4 us = 0.8 ms on our 20 MHz processor.
 	pololu_3pi_init(2000);
-	load_custom_characters(); // load the custom characters
-	// display message
+	
+	//load the custom characters
+	load_custom_characters();
+	
+	//display message
 	print_from_program_space(hello);
-	lcd_goto_xy(0,1);
+	lcd_goto_xy(0, 1);
+	
+	//wait until we move on
 	delay_ms(2000);
-
-	//turn on those cute little leds
-	//green_led(1);
-	//red_led(1);
 }
 
 // return line position
-// YOU MUST WRITE THIS.
 int line_position(unsigned int *s, unsigned int *minv, unsigned int *maxv) {
-	int line = 0;
-	int max = (s[0] / maxv[0]);
-	int i;
-	int curr;
+	int line = -1,
+		max = -1,
+		curr,
+		i
+	;
 	
-	for (i = 1; i < 5; i++) {
-		if ((curr = (s[i] / maxv[i])) > max) {
+	for (i = 0; i < 5; i++) {
+		if ((curr = ((s[i] - minv[i]) * 100) / (maxv[i] - minv[i])) > max) {
 			line = i;
 			max = curr;
 		}
@@ -173,10 +158,12 @@ int line_position(unsigned int *s, unsigned int *minv, unsigned int *maxv) {
 // must have a main() function defined somewhere.
 int main() {
 	// global array to hold sensor values
-	unsigned int sensors[5]; 
+	unsigned int sensors[5];
+	
 	// global arrays to hold min and max sensor values
 	// for calibration
-	unsigned int minv[5], maxv[5]; 
+	unsigned int minv[5], maxv[5];
+	 
 	// line position relative to center
 	int position = 0;
 	  
@@ -193,21 +180,20 @@ int main() {
 		if (button_is_pressed(BUTTON_C)) { speed += 10; delay(100); }
 		
 		// Read the line sensor values
-		read_line_sensors(sensors,IR_EMITTERS_ON);
-		// update minv and mav values,
-		// and put normalized values in v
-		//update_bounds(sensors,minv,maxv);
+		read_line_sensors(sensors, IR_EMITTERS_ON);
 
 		// compute line positon
-		position = line_position(sensors,minv,maxv);
-
-		// display bargraph
+		position = line_position(sensors, minv, maxv);
+		
+		//clear the screen and print the line for debugging
 		clear();
 		print_long(position);
-		lcd_goto_xy(0,1);
-		// for (i=0; i<8; i++) { print_character(display_characters[i]); }
-		display_bars(sensors,minv,maxv);
+		lcd_goto_xy(0, 1);
+
+		//display bargraph
+		display_bars(sensors, minv, maxv);
 		
+		//delay until next round
 		delay_ms(10);
 	}
 }
