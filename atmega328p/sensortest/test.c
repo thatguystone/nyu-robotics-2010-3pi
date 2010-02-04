@@ -15,8 +15,8 @@
 
 // speed of the robot
 #define SPEED 100
-#define OUTTERTURN 40
-#define INNERTURN 20
+#define OUTTERTURN (SPEED*.4)
+#define INNERTURN (SPEED*.2)
 
 //speed of each wheel
 int left = SPEED, right = SPEED;
@@ -144,37 +144,18 @@ void initialize() {
 	delay_ms(2000);
 }
 
-void lineDiff(int line) {
-	if (line != 2) {
-		if (line == 0) {
-			right = SPEED;
-			if (readings[0] - readings[1] >= 10) {
-				right = SPEED + 90;
-				left = 10;
-			} else if (left > SPEED - (OUTTERTURN * 2))
-				left -= OUTTERTURN; 
-		} else if (line == 4) {
-			left = SPEED;
-			if (readings[4] - readings[3] >= 10) {
-				left = SPEED + 90;
-				right = 10;
-			} else if (right > SPEED - (OUTTERTURN * 2))
-				right -= OUTTERTURN;
-		} else if (line == 1) {
-			right = SPEED;
-			if (left > SPEED - (INNERTURN * 2))
-				left -= INNERTURN;
-		} else {
-			left = SPEED;
-			if (right > SPEED - (INNERTURN * 2))
-				right -= INNERTURN;
-		}
-	} else {
-		left = SPEED;
-		right = SPEED;
-	}
+int leftSpeed(int line) {
+	//if we're in the center, straighten out
+	if (line >= 2)
+		return SPEED;
+}
+
+int rightSpeed(int line) {
+	//if we're in the center, straighten out
+	if (line <= 2)
+		return SPEED;
 	
-	set_motors(left, right);
+	
 }
 
 // return line position
@@ -196,7 +177,7 @@ void line_position(unsigned int *s, unsigned int *minv, unsigned int *maxv) {
 	
 	//we know we have which sensor we are closest to
 	//we need to bring it back to sensor 2
-	lineDiff(line);
+	set_motors(leftSpeed(line), rightSpeed(line));
 }
 
 //This is the main function, where the code starts.  All C programs
