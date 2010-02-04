@@ -14,12 +14,10 @@
 #include <avr/pgmspace.h>
 
 // speed of the robot
-int speed = 70;
+int speed = 40;
 // if =1 run the robot, if =0 stop
 int run=1;
 
-//speed of each whhel
-int left, right = 90;
 // Introductory messages.  The "PROGMEM" identifier 
 // causes the data to go into program space.
 const char hello[] PROGMEM = "Stone\nDady";
@@ -104,14 +102,13 @@ void calibrate(unsigned int *sensors, unsigned int *minv, unsigned int *maxv) {
 			delay_ms(500);
 			
 			//activate the motors
-			set_motors(50, -50);
+			set_motors(40, -40);
 			
 			//take 20 readings from the sensors, that should be enough to calibrate
 			int i;
 			for (i = 0; i < 20; i++) {
 				read_line_sensors(sensors, IR_EMITTERS_ON);
 				update_bounds(sensors, minv, maxv);
-				delay_ms(75);
 			}
 			
 			//and turn the motors off, we're done
@@ -119,7 +116,6 @@ void calibrate(unsigned int *sensors, unsigned int *minv, unsigned int *maxv) {
 		}
 	}
 }
-
 
 // Initializes the 3pi, displays a welcome message, calibrates, and
 // plays the initial music.
@@ -183,35 +179,12 @@ int main() {
 		if (button_is_pressed(BUTTON_A)) { speed -= 10; delay(100); }
 		if (button_is_pressed(BUTTON_C)) { speed += 10; delay(100); }
 		
-		
-		set_motors(left, right);
-		//delay_ms(5);
-		
 		// Read the line sensor values
 		read_line_sensors(sensors, IR_EMITTERS_ON);
+
 		// compute line positon
 		position = line_position(sensors, minv, maxv);
 		
-
-		if(position == 0){
-			right = 100;
-			left = 1;
-		}
-		else if(position == 1){
-			right = 100;
-			left = 50;
-		}else if(position == 2){
-			right = 100;
-			left = 100;
-		}else if(position == 3){
-			right = 50;
-			left = 100;
-		}else if(position == 4){
-			right = 1;
-			left = 100;
-		}
-			
-		//delay_ms(10);
 		//clear the screen and print the line for debugging
 		clear();
 		print_long(position);
@@ -221,9 +194,6 @@ int main() {
 		display_bars(sensors, minv, maxv);
 		
 		//delay until next round
-		//delay_ms(50);
-		
-		
-		
+		delay_ms(10);
 	}
 }
