@@ -14,15 +14,19 @@
 #include <avr/pgmspace.h>
 
 // speed of the robot
-int speed = 70;
-// if =1 run the robot, if =0 stop
-int run=1;
+#define SPEED 100
+#define OUTTERTURN 40
+#define INNERTURN 20
 
-//speed of each whhel
-int left, right = 90;
+//speed of each wheel
+int left = SPEED, right = SPEED;
+
+//holds the readings of the sensors
+unsigned int readings[5];
+
 // Introductory messages.  The "PROGMEM" identifier 
 // causes the data to go into program space.
-const char hello[] PROGMEM = "Stone\nDady";
+const char hello[] PROGMEM = "SD";
 
 // Data for generating the characters used in load_custom_characters
 // and display_readings.  By reading levels[] starting at various
@@ -140,8 +144,41 @@ void initialize() {
 	delay_ms(2000);
 }
 
+void lineDiff(int line) {
+	if (line != 2) {
+		if (line == 0) {
+			right = SPEED;
+			if (readings[0] - readings[1] >= 10) {
+				right = SPEED + 90;
+				left = 10;
+			} else if (left > SPEED - (OUTTERTURN * 2))
+				left -= OUTTERTURN; 
+		} else if (line == 4) {
+			left = SPEED;
+			if (readings[4] - readings[3] >= 10) {
+				left = SPEED + 90;
+				right = 10;
+			} else if (right > SPEED - (OUTTERTURN * 2))
+				right -= OUTTERTURN;
+		} else if (line == 1) {
+			right = SPEED;
+			if (left > SPEED - (INNERTURN * 2))
+				left -= INNERTURN;
+		} else {
+			left = SPEED;
+			if (right > SPEED - (INNERTURN * 2))
+				right -= INNERTURN;
+		}
+	} else {
+		left = SPEED;
+		right = SPEED;
+	}
+	
+	set_motors(left, right);
+}
+
 // return line position
-int line_position(unsigned int *s, unsigned int *minv, unsigned int *maxv) {
+void line_position(unsigned int *s, unsigned int *minv, unsigned int *maxv) {
 	int line = -1,
 		max = -1,
 		curr,
@@ -149,29 +186,33 @@ int line_position(unsigned int *s, unsigned int *minv, unsigned int *maxv) {
 	;
 	
 	for (i = 0; i < 5; i++) {
-		if ((curr = ((s[i] - minv[i]) * 100) / (maxv[i] - minv[i])) > max) {
+		curr = ((s[i] - minv[i]) * 100) / (maxv[i] - minv[i]);
+		readings[i] = curr;
+		if (curr > max) {
 			line = i;
 			max = curr;
 		}
 	}
 	
-	return line;
+	//we know we have which sensor we are closest to
+	//we need to bring it back to sensor 2
+	lineDiff(line);
 }
 
-// This is the main function, where the code starts.  All C programs
-// must have a main() function defined somewhere.
+//This is the main function, where the code starts.  All C programs
+//must have a main() function defined somewhere.
 int main() {
-	// global array to hold sensor values
+	//global array to hold sensor values
 	unsigned int sensors[5];
 	
-	// global arrays to hold min and max sensor values
-	// for calibration
+	//global arrays to hold min and max sensor values
+	//for calibration
 	unsigned int minv[5], maxv[5];
 	 
-	// line position relative to center
+	//line position relative to center
 	int position = 0;
 	  
-	// set up the 3pi, and wait for B button to be pressed
+	//set up the 3pi, and wait for B button to be pressed
 	initialize();
 	
 	//calibrate the stuff
@@ -179,51 +220,10 @@ int main() {
 	  
 	// Display calibrated sensor values as a bar graph.
 	while(1) {
-		if (button_is_pressed(BUTTON_B)) { run = 1-run; delay(200); }
-		if (button_is_pressed(BUTTON_A)) { speed -= 10; delay(100); }
-		if (button_is_pressed(BUTTON_C)) { speed += 10; delay(100); }
-		
-		
-		set_motors(left, right);
-		//delay_ms(5);
-		
-		// Read the line sensor values
+		//Read the line sensor values
 		read_line_sensors(sensors, IR_EMITTERS_ON);
-		// compute line positon
-		position = line_position(sensors, minv, maxv);
 		
-
-		if(position == 0){
-			right = 100;
-			left = 1;
-		}
-		else if(position == 1){
-			right = 100;
-			left = 50;
-		}else if(position == 2){
-			right = 100;
-			left = 100;
-		}else if(position == 3){
-			right = 50;
-			left = 100;
-		}else if(position == 4){
-			right = 1;
-			left = 100;
-		}
-			
-		//delay_ms(10);
-		//clear the screen and print the line for debugging
-		clear();
-		print_long(position);
-		lcd_goto_xy(0, 1);
-
-		//display bargraph
-		display_bars(sensors, minv, maxv);
-		
-		//delay until next round
-		//delay_ms(50);
-		
-		
-		
+		//compute line positon
+		line_position(sensors, minv, maxv);
 	}
 }
