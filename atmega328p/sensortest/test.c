@@ -13,72 +13,8 @@
 // pieces of static data should be stored in program space.
 #include <avr/pgmspace.h>
 
-// speed of the robot
-#define SPEED 100
-#define OUTTERTURN (SPEED*.4)
-#define INNERTURN (SPEED*.2)
-
-//speed of each wheel
-int left = SPEED, right = SPEED;
-
-//holds the readings of the sensors
-unsigned int readings[5];
-
-// Introductory messages.  The "PROGMEM" identifier 
-// causes the data to go into program space.
-const char hello[] PROGMEM = "SD";
-
-// Data for generating the characters used in load_custom_characters
-// and display_readings.  By reading levels[] starting at various
-// offsets, we can generate all of the 7 extra characters needed for a
-// bargraph.  This is also stored in program space.
-const char levels[] PROGMEM = {
-	0b00000,
-	0b00000,
-	0b00000,
-	0b00000,
-	0b00000,
-	0b00000,
-	0b00000,
-	0b11111,
-	0b11111,
-	0b11111,
-	0b11111,
-	0b11111,
-	0b11111,
-	0b11111
-};
-
-char display_characters[9] = { ' ', 0, 1, 2, 3, 4, 5, 6, 255 };
-
-// This function loads custom characters into the LCD.  Up to 8
-// characters can be loaded; we use them for 7 levels of a bar graph.
-void load_custom_characters() {
-	lcd_load_custom_character(levels+0,0); // no offset, e.g. one bar
-	lcd_load_custom_character(levels+1,1); // two bars
-	lcd_load_custom_character(levels+2,2); // etc...
-	lcd_load_custom_character(levels+3,3);
-	lcd_load_custom_character(levels+4,4);
-	lcd_load_custom_character(levels+5,5);
-	lcd_load_custom_character(levels+6,6);
-	clear(); // the LCD must be cleared for the characters to take effect
-}
-
-// This function displays the sensor readings using a bar graph.
-void display_bars(const unsigned int *s, const unsigned int *minv, const unsigned int* maxv) {
-	// Initialize the array of characters that we will use for the
-	// graph.  Using the space, and character 255 (a full black box).
-	
-	lcd_goto_xy(0,1);
-	
-	unsigned char i;
-	for (i=0;i<5;i++) {
-		int c = ((int)s[i]-(int)minv[i])*9/((int)maxv[i]-(int)minv[i]);
-		c = (c<0)?0:(c>8)?8:c;
-		// if (i==0) {print_long(s[0]); print_long(c); }
-		print_character(display_characters[c]);
-	}
-}
+//sensor values
+const int vals[5] = {0, 120, 250, 380, 500};
 
 void update_bounds(const unsigned int *s, unsigned int *minv, unsigned int *maxv) {
 	int i;
@@ -94,32 +30,31 @@ void calibrate(unsigned int *sensors, unsigned int *minv, unsigned int *maxv) {
 	clear();
 	lcd_goto_xy(0, 0);
 	print("A-Cal");
-	lcd_goto_xy(0, 1);
-	print("C-Go");
 	
 	//and do some stuff for calibration
 	while (1) {
-		//C breaks the calibration and goes into running
-		if (button_is_pressed(BUTTON_C)) break;
-		
 		//A recalibrates all the sensors
 		if (button_is_pressed(BUTTON_A)) {
 			//give the user time to move his hand away
 			delay_ms(500);
 			
 			//activate the motors
-			set_motors(50, -50);
+			set_motors(40, -40);
 			
 			//take 20 readings from the sensors, that should be enough to calibrate
 			int i;
-			for (i = 0; i < 20; i++) {
+			for (i = 0; i < 82; i++) {
 				read_line_sensors(sensors, IR_EMITTERS_ON);
 				update_bounds(sensors, minv, maxv);
-				delay_ms(75);
+				delay_ms(20);
 			}
 			
 			//and turn the motors off, we're done
 			set_motors(0, 0);
+			
+			delay_ms(500);
+			
+			break;
 		}
 	}
 }
@@ -132,52 +67,65 @@ void initialize() {
 	//sensors.  We use a value of 2000 for the timeout, which
 	//corresponds to 2000*0.4 us = 0.8 ms on our 20 MHz processor.
 	pololu_3pi_init(2000);
-	
-	//load the custom characters
-	load_custom_characters();
-	
-	//display message
-	print_from_program_space(hello);
-	lcd_goto_xy(0, 1);
-	
-	//wait until we move on
-	delay_ms(2000);
 }
 
-int leftSpeed(int line) {
-	//if we're in the center, straighten out
-	if (line >= 2)
-		return SPEED;
-}
-
-int rightSpeed(int line) {
-	//if we're in the center, straighten out
-	if (line <= 2)
-		return SPEED;
+//return line position
+int line_position(unsigned int *sensors, unsigned int *minv, unsigned int *maxv) {
+	unsigned int i, avg = 0, sum = 0;
+	char seen = 0;
 	
+	static int last = 0;
 	
-}
-
-// return line position
-void line_position(unsigned int *s, unsigned int *minv, unsigned int *maxv) {
-	int line = -1,
-		max = -1,
-		curr,
-		i
-	;
+	for (i = 0; i < 5; i++)
+		sensors[i] = ((long)(sensors[i] - minv[i]) * 100) / (maxv[i] - minv[i]);
 	
 	for (i = 0; i < 5; i++) {
-		curr = ((s[i] - minv[i]) * 100) / (maxv[i] - minv[i]);
-		readings[i] = curr;
-		if (curr > max) {
-			line = i;
-			max = curr;
+		if (sensors[i] > 40)
+			seen = 1;
+	
+		//if we're seeing something
+		if (sensors[i] > 25) {
+			avg += sensors[i] * vals[i];
+			sum += sensors[i];
 		}
 	}
 	
-	//we know we have which sensor we are closest to
-	//we need to bring it back to sensor 2
-	set_motors(leftSpeed(line), rightSpeed(line));
+	if (!seen) {
+		if (last >= 250)
+			return 400;
+		else
+			return 0;
+	}
+	
+	last = avg / sum;
+	
+	return last;
+}
+
+//adjusts the speed based on user input
+int adjustSpeed(int speed) {
+	while(1) {
+		if (button_is_pressed(BUTTON_A))
+			speed += 10;
+		if (button_is_pressed(BUTTON_B))
+			speed -= 10;
+		if (button_is_pressed(BUTTON_C))
+			break;
+		
+			
+		clear();
+		print("Spd: ");
+		print_long(speed);
+		delay_ms(100);
+	}
+	
+	clear();
+	print("Going...");
+	
+	//give the user time to move his hand
+	delay(750);
+	
+	return speed;
 }
 
 //This is the main function, where the code starts.  All C programs
@@ -190,21 +138,85 @@ int main() {
 	//for calibration
 	unsigned int minv[5], maxv[5];
 	 
-	//line position relative to center
-	int position = 0;
-	  
 	//set up the 3pi, and wait for B button to be pressed
 	initialize();
 	
 	//calibrate the stuff
 	calibrate(sensors, minv, maxv);
-	  
-	// Display calibrated sensor values as a bar graph.
+
+	//see if we're setting a speed
+	int const speed = adjustSpeed(75);
+
+	//holds the deriv
+	int deriv;
+	
+	int propK = 4;
+	
+	junk:
+		while (1) {
+			set_motors(0, 0);
+			if (button_is_pressed(BUTTON_A))
+				propK++;
+			if (button_is_pressed(BUTTON_B))
+				propK--;
+			if (button_is_pressed(BUTTON_C))
+				break;
+			
+			clear();
+			print_long(propK);
+			delay_ms(100);
+		}
+	
+	//holds the integral
+	int integ = 0;
+	
+	//holds the last position
+	int lastProp = 0;
+	
+	//line position relative to center
+	int position = 0;
+	
+	//run in circles
 	while(1) {
+		if (button_is_pressed(BUTTON_B))
+			goto junk;
+	
 		//Read the line sensor values
 		read_line_sensors(sensors, IR_EMITTERS_ON);
 		
 		//compute line positon
-		line_position(sensors, minv, maxv);
+		position = line_position(sensors, minv, maxv);
+		
+		//get the middle sensors to = 0
+		int prop = position - 250;
+		
+		//calc the derivative
+		deriv = prop - lastProp;
+		//and integral
+		integ += prop; 
+		lastProp = prop;
+		
+		int propSpeed = prop/4 + integ/19000 + deriv*propK/10;
+		
+		int left = speed+propSpeed;
+		int right = speed-propSpeed;
+		
+		if (left < 0) {
+			int diff = 0 - left;
+			right += diff - 10;
+			left = 10;
+		}
+		if (right < 0) {
+			int diff = 0 - right;
+			left += diff - 10;
+			right = 10;	
+		}
+		
+		if (left > 255)
+			left = 255;
+		if (right > 255)
+			right = 255;
+		
+		set_motors(left, right);
 	}
 }
