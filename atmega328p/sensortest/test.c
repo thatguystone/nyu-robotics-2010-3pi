@@ -14,7 +14,8 @@
 #include <avr/pgmspace.h>
 
 //sensor values
-const int vals[5] = {0, 120, 250, 380, 500};
+//const int vals[5] = {0, 120, 250, 380, 500};
+int vals[5] = {0, 30, 250, 470, 500};
 
 void update_bounds(const unsigned int *s, unsigned int *minv, unsigned int *maxv) {
 	int i;
@@ -43,7 +44,7 @@ void calibrate(unsigned int *sensors, unsigned int *minv, unsigned int *maxv) {
 			
 			//take 20 readings from the sensors, that should be enough to calibrate
 			int i;
-			for (i = 0; i < 82; i++) {
+			for (i = 0; i < 88; i++) {
 				read_line_sensors(sensors, IR_EMITTERS_ON);
 				update_bounds(sensors, minv, maxv);
 				delay_ms(20);
@@ -67,6 +68,10 @@ void initialize() {
 	//sensors.  We use a value of 2000 for the timeout, which
 	//corresponds to 2000*0.4 us = 0.8 ms on our 20 MHz processor.
 	pololu_3pi_init(2000);
+	
+	//let's kill that battery!
+	red_led(1);
+	green_led(1);
 }
 
 //return line position
@@ -91,8 +96,8 @@ int line_position(unsigned int *sensors, unsigned int *minv, unsigned int *maxv)
 	}
 	
 	if (!seen) {
-		if (last >= 250)
-			return 400;
+		if (last >= 200)
+			return 500;
 		else
 			return 0;
 	}
@@ -112,7 +117,6 @@ int adjustSpeed(int speed) {
 		if (button_is_pressed(BUTTON_C))
 			break;
 		
-			
 		clear();
 		print("Spd: ");
 		print_long(speed);
@@ -145,27 +149,59 @@ int main() {
 	calibrate(sensors, minv, maxv);
 
 	//see if we're setting a speed
-	int const speed = adjustSpeed(75);
+	int speed = adjustSpeed(150);
 
 	//holds the deriv
 	int deriv;
 	
-	int propK = 4;
+	int propK = vals[1], propI = vals[3];
 	
-	junk:
+	goto loop;
+	
+	/*
+	propKAdjust:
 		while (1) {
 			set_motors(0, 0);
 			if (button_is_pressed(BUTTON_A))
-				propK++;
+				propK += 10;
 			if (button_is_pressed(BUTTON_B))
-				propK--;
+				propK -= 10;
 			if (button_is_pressed(BUTTON_C))
 				break;
 			
+			vals[1] = propK;
+			
 			clear();
+			print("K:");
 			print_long(propK);
 			delay_ms(100);
 		}
+		goto loop;
+	
+	propIAdjust:
+		while (1) {
+			set_motors(0, 0);
+			if (button_is_pressed(BUTTON_A))
+				propI += 10;
+			if (button_is_pressed(BUTTON_B))
+				propI -= 10;
+			if (button_is_pressed(BUTTON_C))
+				break;
+			
+			vals[3] = propI;
+			
+			clear();
+			print("I:");
+			print_long(propI);
+			delay_ms(100);
+		}
+	*/
+	
+	propIAdjust: propKAdjust:
+		//see if we're setting a speed
+		speed = adjustSpeed(speed);
+	loop:
+	;
 	
 	//holds the integral
 	int integ = 0;
@@ -179,7 +215,9 @@ int main() {
 	//run in circles
 	while(1) {
 		if (button_is_pressed(BUTTON_B))
-			goto junk;
+			goto propKAdjust;
+		if (button_is_pressed(BUTTON_A))
+			goto propIAdjust;
 	
 		//Read the line sensor values
 		read_line_sensors(sensors, IR_EMITTERS_ON);
@@ -190,13 +228,16 @@ int main() {
 		//get the middle sensors to = 0
 		int prop = position - 250;
 		
+		//clear();
+		//print_long(prop);
+		
 		//calc the derivative
 		deriv = prop - lastProp;
 		//and integral
 		integ += prop; 
 		lastProp = prop;
 		
-		int propSpeed = prop/4 + integ/19000 + deriv*propK/10;
+		int propSpeed = prop/3 + integ/700 + deriv*22;
 		
 		int left = speed+propSpeed;
 		int right = speed-propSpeed;
@@ -216,6 +257,18 @@ int main() {
 			left = 255;
 		if (right > 255)
 			right = 255;
+		
+		/*
+		lcd_goto_xy(0, 1);
+		print_long(propSpeed);
+		lcd_goto_xy(4, 0);
+		print_long(left);
+		lcd_goto_xy(4, 1);
+		print_long(right);
+		
+		delay_ms(250);
+		continue;
+		*/
 		
 		set_motors(left, right);
 	}
