@@ -29,7 +29,9 @@ void calibrate(unsigned int *sensors, unsigned int *minv, unsigned int *maxv) {
 	//give instructions
 	clear();
 	lcd_goto_xy(0, 0);
-	print("A-Cal");
+	print("Fluffy");
+	lcd_goto_xy(0, 0);
+	print("hates u");
 	
 	//and do some stuff for calibration
 	while (1) {
@@ -148,7 +150,8 @@ int main() {
 	calibrate(sensors, minv, maxv);
 
 	//see if we're setting a speed
-	int speed = adjustSpeed(135);
+	//int speed = adjustSpeed(135);
+	int const speed = 150;
 
 	//holds the deriv
 	int deriv;
@@ -161,6 +164,8 @@ int main() {
 	
 	//line position relative to center
 	int position = 0;
+	
+	long last = millis();
 	
 	//run in circles
 	while(1) {
@@ -179,7 +184,10 @@ int main() {
 		integ += prop; 
 		lastProp = prop;
 		
-		int propSpeed = prop/3 + integ/800 + deriv*20;
+		long now = millis();
+		long diff = now - last;
+		int propSpeed = prop/2 + (((integ/1000) + (deriv*30)) * diff);
+		last = now;
 		
 		int left = speed+propSpeed;
 		int right = speed-propSpeed;
