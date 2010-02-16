@@ -30,7 +30,7 @@ void calibrate(unsigned int *sensors, unsigned int *minv, unsigned int *maxv) {
 	clear();
 	lcd_goto_xy(0, 0);
 	print("Fluffy");
-	lcd_goto_xy(0, 0);
+	lcd_goto_xy(0, 1);
 	print("hates u");
 	
 	//and do some stuff for calibration
@@ -108,31 +108,6 @@ int line_position(unsigned int *sensors, unsigned int *minv, unsigned int *maxv)
 	return last;
 }
 
-//adjusts the speed based on user input
-int adjustSpeed(int speed) {
-	while(1) {
-		if (button_is_pressed(BUTTON_A))
-			speed += 10;
-		if (button_is_pressed(BUTTON_B))
-			speed -= 10;
-		if (button_is_pressed(BUTTON_C))
-			break;
-		
-		clear();
-		print("Spd: ");
-		print_long(speed);
-		delay_ms(100);
-	}
-	
-	clear();
-	print("Going...");
-	
-	//give the user time to move his hand
-	delay(750);
-	
-	return speed;
-}
-
 //This is the main function, where the code starts.  All C programs
 //must have a main() function defined somewhere.
 int main() {
@@ -186,7 +161,7 @@ int main() {
 		
 		long now = millis();
 		long diff = now - last;
-		int propSpeed = prop/2 + (((integ/1000) + (deriv*30)) * diff);
+		int propSpeed = prop/2 + (((integ/1000) + (deriv*25)) * diff);
 		last = now;
 		
 		int left = speed+propSpeed;
