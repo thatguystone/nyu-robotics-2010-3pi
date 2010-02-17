@@ -14,59 +14,7 @@
 #include <avr/pgmspace.h>
 
 //sensor values
-int const vals[5] = {0, 30, 250, 470, 500};
-
-// Data for generating the characters used in load_custom_characters
-// and display_readings.  By reading levels[] starting at various
-// offsets, we can generate all of the 7 extra characters needed for a
-// bargraph.  This is also stored in program space.
-const char levels[] PROGMEM = {
-	0b00000,
-	0b00000,
-	0b00000,
-	0b00000,
-	0b00000,
-	0b00000,
-	0b00000,
-	0b11111,
-	0b11111,
-	0b11111,
-	0b11111,
-	0b11111,
-	0b11111,
-	0b11111
-};
-
-char display_characters[9] = { ' ', 0, 1, 2, 3, 4, 5, 6, 255 };
-
-// This function loads custom characters into the LCD.  Up to 8
-// characters can be loaded; we use them for 7 levels of a bar graph.
-void load_custom_characters() {
-	lcd_load_custom_character(levels+0,0); // no offset, e.g. one bar
-	lcd_load_custom_character(levels+1,1); // two bars
-	lcd_load_custom_character(levels+2,2); // etc...
-	lcd_load_custom_character(levels+3,3);
-	lcd_load_custom_character(levels+4,4);
-	lcd_load_custom_character(levels+5,5);
-	lcd_load_custom_character(levels+6,6);
-	clear(); // the LCD must be cleared for the characters to take effect
-}
-
-// This function displays the sensor readings using a bar graph.
-void display_bars(const unsigned int *s, const unsigned int *minv, const unsigned int* maxv) {
-	// Initialize the array of characters that we will use for the
-	// graph.  Using the space, and character 255 (a full black box).
-	
-	lcd_goto_xy(0,1);
-	
-	unsigned char i;
-	for (i=0;i<5;i++) {
-		int c = ((int)s[i]-(int)minv[i])*9/((int)maxv[i]-(int)minv[i]);
-		c = (c<0)?0:(c>8)?8:c;
-		// if (i==0) {print_long(s[0]); print_long(c); }
-		print_character(display_characters[c]);
-	}
-}
+int const vals[5] = {0, 40, 250, 460, 500};
 
 void update_bounds(const unsigned int *s, unsigned int *minv, unsigned int *maxv) {
 	int i;
@@ -85,52 +33,32 @@ void calibrate(unsigned int *sensors, unsigned int *minv, unsigned int *maxv) {
 	lcd_goto_xy(0, 1);
 	print("hates u");
 	
-	while (!button_is_pressed(BUTTON_A));
+	wait_for_button_press(BUTTON_A);
 	
 	delay_ms(500);
 	
 	//activate the motors
-	set_motors(30, -30);
+	set_motors(40, -40);
 	
 	//take 20 readings from the sensors, that should be enough to calibrate
 	int i;
-	for (i = 0; i < 250; i++) {
+	for (i = 0; i < 165; i++) {
 		read_line_sensors(sensors, IR_EMITTERS_ON);
 		update_bounds(sensors, minv, maxv);
 		delay_ms(10);
 	}
 	
+	//bring down the sensor readings...if we don't, then the reading might actually be lower than the min from time to time
+	//and that creates problems for the unsigned int...because subtraction...blah blah blah
+	for (i = 0; i < 5; i++)
+		minv[i] -= 40;
+	
 	//and turn the motors off, we're done
 	set_motors(0, 0);
 	
-	//and do some stuff for calibration
-	while (!button_is_pressed(BUTTON_C)) {
-		clear();
-		print("Line:");
-		read_line_sensors(sensors, IR_EMITTERS_ON);
-		display_bars(sensors, minv, maxv);
-		delay_ms(100);
-	}
-	
-	clear();
-	print("Going...");
+	delay_ms(750);
 }
 
-
-// Initializes the 3pi, displays a welcome message, calibrates, and
-// plays the initial music.
-void initialize() {
-	//This must be called at the beginning of 3pi code, to set up the
-	//sensors.  We use a value of 2000 for the timeout, which
-	//corresponds to 2000*0.4 us = 0.8 ms on our 20 MHz processor.
-	pololu_3pi_init(2000);
-	
-	load_custom_characters();
-	
-	//let's kill that battery!
-	//red_led(1);
-	//green_led(1);
-}
 
 //return line position
 int line_position(unsigned int *sensors, unsigned int *minv, unsigned int *maxv) {
@@ -143,11 +71,11 @@ int line_position(unsigned int *sensors, unsigned int *minv, unsigned int *maxv)
 		sensors[i] = ((long)(sensors[i] - minv[i]) * 100) / (maxv[i] - minv[i]);
 	
 	for (i = 0; i < 5; i++) {
-		if (sensors[i] > 40)
+		if (sensors[i] > 25)
 			seen = 1;
 	
 		//if we're seeing something
-		if (sensors[i] > 15) {
+		if (sensors[i] > 10) {
 			avg += sensors[i] * vals[i];
 			sum += sensors[i];
 		}
@@ -175,8 +103,8 @@ int main() {
 	//for calibration
 	unsigned int minv[5] = {65500, 65500, 65500, 65500, 65500}, maxv[5] = {0, 0, 0, 0, 0};
 	 
-	//set up the 3pi, and wait for B button to be pressed
-	initialize();
+	//set up the 3pi
+	pololu_3pi_init(2000);
 	
 	//calibrate the stuff
 	calibrate(sensors, minv, maxv);
@@ -199,8 +127,60 @@ int main() {
 	
 	long last = millis();
 	
+	int propK = 20;
+	int propI = 1550;
+	
+	goto loop;
+	
+	propKAdjust:
+		set_motors(0, 0);
+		
+		while (1) {
+			delay_ms(100);
+			
+			if (button_is_pressed(BUTTON_A))
+				propK++;
+			if (button_is_pressed(BUTTON_B))
+				propK--;
+			if (button_is_pressed(BUTTON_C))
+				break;
+			
+			clear();
+			print("PropK:");
+			lcd_goto_xy(0, 1);
+			print_long(propK);
+		}
+		
+		goto loop;
+		
+	propIAdjust:
+		set_motors(0, 0);
+		
+		while (1) {
+			delay_ms(100);
+			
+			if (button_is_pressed(BUTTON_A))
+				propI += 100;
+			if (button_is_pressed(BUTTON_B))
+				propI -= 100;
+			if (button_is_pressed(BUTTON_C))
+				break;
+			
+			clear();
+			print("PropI:");
+			lcd_goto_xy(0, 1);
+			print_long(propI);
+		}
+	
+	loop:
+	
 	//run in circles
 	while(1) {
+		if (button_is_pressed(BUTTON_A))
+			goto propKAdjust;
+		if (button_is_pressed(BUTTON_B))
+			goto propIAdjust;	
+	
 		//Read the line sensor values
 		read_line_sensors(sensors, IR_EMITTERS_ON);
 		
@@ -218,7 +198,7 @@ int main() {
 		
 		long now = millis();
 		long diff = now - last;
-		int propSpeed = prop/2 + (((integ/1000) + (deriv*30)) * diff);
+		int propSpeed = (prop + (integ/propI) + (deriv*propK)) * diff;
 		last = now;
 		
 		int left = speed+propSpeed;
