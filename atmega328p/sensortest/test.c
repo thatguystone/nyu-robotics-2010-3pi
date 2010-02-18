@@ -116,22 +116,8 @@ int main() {
 	//int speed = adjustSpeed(135);
 	int const speed = 200;
 
-	//holds the deriv
-	int deriv;
-	
-	//holds the integral
-	int integ = 0;
-	
-	//holds the last position
-	int lastProp = 0;
-	
-	//line position relative to center
-	int position = 0;
-	
-	long last = millis();
-	
-	int propK = 25;
-	int propI = 7000;
+	int propK = 18;
+	int propI = 8000;
 	
 	goto loop;
 	
@@ -175,7 +161,21 @@ int main() {
 			print_long(propI);
 		}
 	
-	loop:
+	loop:;
+	
+	//holds the deriv
+	int deriv;
+	
+	//holds the integral
+	int integ = 0;
+	
+	//holds the last position
+	int lastProp = 0;
+	
+	//line position relative to center
+	int position = 0;
+	
+	long last = millis();
 	
 	//run in circles
 	while(1) {
@@ -184,7 +184,7 @@ int main() {
 		if (button_is_pressed(BUTTON_B))
 			goto propIAdjust;	
 	
-		//Read the line sensor values
+		//read the line sensor values
 		read_line_sensors(sensors, IR_EMITTERS_ON);
 		
 		//compute line positon
@@ -193,38 +193,46 @@ int main() {
 		//get the middle sensors to = 0
 		int prop = position - 250;
 		
+		//save the running time
 		long now = millis();
 		long diff = now - last;
 		
 		//calc the derivative
-		deriv = ((prop - lastProp)*10) / diff;
-		//and integral
+		deriv = ((prop - lastProp) * 10) / diff;
 		
+		//if the robot has changed directions, clear the integral
 		if ((lastProp < 0 && prop > 0) || (prop < 0 && lastProp > 0))
 			integ = prop * diff;
 		else
 			integ += prop * diff;
 		
-		integ = abs(integ);
+		//make sure integral doesn't go below 0
+		if (integ < 0)
+			integ *= -1;
 		
-		int propSpeed = prop*2 + (integ/propI) + (deriv*propK);
+		//get a proportional speed
+		int propSpeed = prop * 2 + (integ / propI) + (deriv * propK);
 		
+		//set our last run time
 		last = now;
 		
+		//get a proportional speed
 		int left = speed+propSpeed;
 		int right = speed-propSpeed;
 		
-		if (left < 0) {
+		//make sure the motors are never off / going negative
+		if (left <= 0) {
 			int diff = 0 - left;
 			right += diff - 10;
 			left = 10;
 		}
-		if (right < 0) {
+		if (right <= 0) {
 			int diff = 0 - right;
 			left += diff - 10;
 			right = 10;	
 		}
 		
+		//limit the motors to their maxes
 		if (left > 255)
 			left = 255;
 		if (right > 255)
@@ -232,13 +240,6 @@ int main() {
 		
 		lastProp = prop;
 
-	/*	clear();
-		print_long(deriv);
-		lcd_goto_xy(0, 1);
-		print_long(lastProp);
-		delay_ms(300);
-		continue;*/
-		
 		set_motors(left, right);
 		delay_ms(1);
 	}
