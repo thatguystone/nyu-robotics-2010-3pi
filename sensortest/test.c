@@ -114,10 +114,10 @@ int main() {
 
 	//see if we're setting a speed
 	//int speed = adjustSpeed(135);
-	int const speed = 200;
+	int const speed = 135;
 
-	int propK = 25;
-	int propI = 7000;
+	int propK = 14;
+	int propI = 8000;
 	
 	goto loop;
 	
