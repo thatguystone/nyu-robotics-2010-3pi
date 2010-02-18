@@ -14,7 +14,7 @@
 #include <avr/pgmspace.h>
 
 //sensor values
-int const vals[5] = {0, 40, 250, 460, 500};
+int const vals[5] = {0, 125, 250, 375, 500};
 
 void update_bounds(const unsigned int *s, unsigned int *minv, unsigned int *maxv) {
 	int i;
@@ -59,7 +59,6 @@ void calibrate(unsigned int *sensors, unsigned int *minv, unsigned int *maxv) {
 	delay_ms(750);
 }
 
-
 //return line position
 int line_position(unsigned int *sensors, unsigned int *minv, unsigned int *maxv) {
 	unsigned int i, avg = 0, sum = 0;
@@ -67,15 +66,19 @@ int line_position(unsigned int *sensors, unsigned int *minv, unsigned int *maxv)
 	
 	static int last = 0;
 	
-	for (i = 0; i < 5; i++)
+	for (i = 0; i < 5; i++) {
 		sensors[i] = ((long)(sensors[i] - minv[i]) * 100) / (maxv[i] - minv[i]);
+		
+		if (sensors[i] >= 100)
+			return last;
+	}
 	
 	for (i = 0; i < 5; i++) {
 		if (sensors[i] > 25)
 			seen = 1;
 	
 		//if we're seeing something
-		if (sensors[i] > 10) {
+		if (sensors[i] > 5) {
 			avg += sensors[i] * vals[i];
 			sum += sensors[i];
 		}
@@ -111,7 +114,7 @@ int main() {
 
 	//see if we're setting a speed
 	//int speed = adjustSpeed(135);
-	int const speed = 150;
+	int const speed = 135;
 
 	//holds the deriv
 	int deriv;
@@ -127,8 +130,8 @@ int main() {
 	
 	long last = millis();
 	
-	int propK = 20;
-	int propI = 1550;
+	int propK = 45;
+	int propI = 8000;
 	
 	goto loop;
 	
@@ -190,15 +193,22 @@ int main() {
 		//get the middle sensors to = 0
 		int prop = position - 250;
 		
-		//calc the derivative
-		deriv = prop - lastProp;
-		//and integral
-		integ += prop; 
-		lastProp = prop;
-		
 		long now = millis();
 		long diff = now - last;
-		int propSpeed = (prop + (integ/propI) + (deriv*propK)) * diff;
+		
+		//calc the derivative
+		deriv = (prop - lastProp) / diff;
+		//and integral
+		
+		if ((lastProp < 0 && prop > 0) || (prop < 0 && lastProp > 0))
+			integ = 0;
+		else
+			integ += deriv * diff;
+		
+		lastProp = prop;
+		
+		int propSpeed = prop*2 + (integ/propI) + (deriv*propK);
+		
 		last = now;
 		
 		int left = speed+propSpeed;
@@ -219,6 +229,15 @@ int main() {
 			left = 255;
 		if (right > 255)
 			right = 255;
+		
+		/*
+		clear();
+		print_long(left);
+		lcd_goto_xy(0, 1);
+		print_long(right);
+		delay_ms(100);
+		continue;
+		*/
 		
 		set_motors(left, right);
 	}
