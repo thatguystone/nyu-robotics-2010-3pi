@@ -114,7 +114,7 @@ int main() {
 
 	//see if we're setting a speed
 	//int speed = adjustSpeed(135);
-	int const speed = 135;
+	int const speed = 200;
 
 	//holds the deriv
 	int deriv;
@@ -130,8 +130,8 @@ int main() {
 	
 	long last = millis();
 	
-	int propK = 45;
-	int propI = 8000;
+	int propK = 25;
+	int propI = 7000;
 	
 	goto loop;
 	
@@ -197,15 +197,15 @@ int main() {
 		long diff = now - last;
 		
 		//calc the derivative
-		deriv = (prop - lastProp) / diff;
+		deriv = ((prop - lastProp)*10) / diff;
 		//and integral
 		
 		if ((lastProp < 0 && prop > 0) || (prop < 0 && lastProp > 0))
-			integ = 0;
+			integ = prop * diff;
 		else
-			integ += deriv * diff;
+			integ += prop * diff;
 		
-		lastProp = prop;
+		integ = abs(integ);
 		
 		int propSpeed = prop*2 + (integ/propI) + (deriv*propK);
 		
@@ -230,15 +230,16 @@ int main() {
 		if (right > 255)
 			right = 255;
 		
-		/*
-		clear();
-		print_long(left);
+		lastProp = prop;
+
+	/*	clear();
+		print_long(deriv);
 		lcd_goto_xy(0, 1);
-		print_long(right);
-		delay_ms(100);
-		continue;
-		*/
+		print_long(lastProp);
+		delay_ms(300);
+		continue;*/
 		
 		set_motors(left, right);
+		delay_ms(1);
 	}
 }
