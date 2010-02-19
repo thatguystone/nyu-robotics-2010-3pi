@@ -31,12 +31,12 @@ void calibrate(unsigned int *sensors, unsigned int *minv, unsigned int *maxv) {
 	lcd_goto_xy(0, 0);
 	print("Fluffy");
 	lcd_goto_xy(0, 1);
-	print("hates u");
+	print("hates #s");
 	
 	wait_for_button_press(BUTTON_A);
 	
 	delay_ms(500);
-	
+
 	//activate the motors
 	set_motors(40, -40);
 	
@@ -47,12 +47,7 @@ void calibrate(unsigned int *sensors, unsigned int *minv, unsigned int *maxv) {
 		update_bounds(sensors, minv, maxv);
 		delay_ms(10);
 	}
-	
-	//bring down the sensor readings...if we don't, then the reading might actually be lower than the min from time to time
-	//and that creates problems for the unsigned int...because subtraction...blah blah blah
-	for (i = 0; i < 5; i++)
-		minv[i] -= 40;
-	
+
 	//and turn the motors off, we're done
 	set_motors(0, 0);
 	
@@ -60,27 +55,42 @@ void calibrate(unsigned int *sensors, unsigned int *minv, unsigned int *maxv) {
 }
 
 //return line position
-int line_position(unsigned int *sensors, unsigned int *minv, unsigned int *maxv) {
-	unsigned int i, avg = 0, sum = 0;
+int line_position(unsigned int *sensors, unsigned int *minv, unsigned int *maxv, int *range) {
+	int s[5];
+	unsigned long i, avg = 0, sum = 0;
 	char seen = 0;
 	
 	static int last = 0;
 	
 	for (i = 0; i < 5; i++) {
-		sensors[i] = ((long)(sensors[i] - minv[i]) * 100) / (maxv[i] - minv[i]);
+		s[i] = (int)((int)sensors[i] - (int)minv[i]);
+		s[i] = ((long)(s[i] * 100)) / (maxv[i] - minv[i]);
 		
-		if (sensors[i] >= 100)
-			return last;
+		//if above 100, reset!
+		if (s[i] >= 100)
+			s[i] = 100;
+		
+		//if the reading is below 0, reset!
+		if (s[i] < 0)
+			s[i] = 0;
+		
+		//if we get a crap reading (ie. it jumps too far in one direction), ignore it
+		if (s[i] < (range[i] - 30) || s[i] > (range[i] + 30))
+			s[i] = range[i];
+		
+		//save our last reading for our range
+		range[i] = s[i];
 	}
 	
 	for (i = 0; i < 5; i++) {
-		if (sensors[i] > 25)
+		//did we see the line? or should we make a sharp turn to try to find it again?
+		if (s[i] > 35)
 			seen = 1;
 	
 		//if we're seeing something
-		if (sensors[i] > 5) {
-			avg += sensors[i] * vals[i];
-			sum += sensors[i];
+		if (s[i] > 20) {
+			avg += (long)((long)s[i] * vals[i]);
+			sum += s[i];
 		}
 	}
 	
@@ -91,9 +101,7 @@ int line_position(unsigned int *sensors, unsigned int *minv, unsigned int *maxv)
 			return 0;
 	}
 	
-	last = avg / sum;
-	
-	return last;
+	return last = avg / sum;
 }
 
 //This is the main function, where the code starts.  All C programs
@@ -105,64 +113,24 @@ int main() {
 	//global arrays to hold min and max sensor values
 	//for calibration
 	unsigned int minv[5] = {65500, 65500, 65500, 65500, 65500}, maxv[5] = {0, 0, 0, 0, 0};
+	
+	int range[5];
 	 
 	//set up the 3pi
 	pololu_3pi_init(2000);
 	
 	//calibrate the stuff
 	calibrate(sensors, minv, maxv);
+	
+	int i;
+	for (i = 0; i < 5; i++) {
+		range[i] = (int)((int)sensors[i] - (int)minv[i]);
+		range[i] = ((long)(range[i] * 100)) / (maxv[i] - minv[i]);
+	}
 
-	//see if we're setting a speed
-	//int speed = adjustSpeed(135);
-	int const speed = 135;
+	//set the speed
+	int const speed = 255;
 
-	int propK = 14;
-	int propI = 8000;
-	
-	goto loop;
-	
-	propKAdjust:
-		set_motors(0, 0);
-		
-		while (1) {
-			delay_ms(100);
-			
-			if (button_is_pressed(BUTTON_A))
-				propK++;
-			if (button_is_pressed(BUTTON_B))
-				propK--;
-			if (button_is_pressed(BUTTON_C))
-				break;
-			
-			clear();
-			print("PropK:");
-			lcd_goto_xy(0, 1);
-			print_long(propK);
-		}
-		
-		goto loop;
-		
-	propIAdjust:
-		set_motors(0, 0);
-		
-		while (1) {
-			delay_ms(100);
-			
-			if (button_is_pressed(BUTTON_A))
-				propI += 100;
-			if (button_is_pressed(BUTTON_B))
-				propI -= 100;
-			if (button_is_pressed(BUTTON_C))
-				break;
-			
-			clear();
-			print("PropI:");
-			lcd_goto_xy(0, 1);
-			print_long(propI);
-		}
-	
-	loop:;
-	
 	//holds the deriv
 	int deriv;
 	
@@ -179,16 +147,11 @@ int main() {
 	
 	//run in circles
 	while(1) {
-		if (button_is_pressed(BUTTON_A))
-			goto propKAdjust;
-		if (button_is_pressed(BUTTON_B))
-			goto propIAdjust;	
-	
 		//read the line sensor values
 		read_line_sensors(sensors, IR_EMITTERS_ON);
 		
 		//compute line positon
-		position = line_position(sensors, minv, maxv);
+		position = line_position(sensors, minv, maxv, range);
 		
 		//get the middle sensors to = 0
 		int prop = position - 250;
@@ -202,16 +165,12 @@ int main() {
 		
 		//if the robot has changed directions, clear the integral
 		if ((lastProp < 0 && prop > 0) || (prop < 0 && lastProp > 0))
-			integ = prop * diff;
+			integ = 0;
 		else
 			integ += prop * diff;
 		
-		//make sure integral doesn't go below 0
-		if (integ < 0)
-			integ *= -1;
-		
 		//get a proportional speed
-		int propSpeed = prop * 2 + (integ / propI) + (deriv * propK);
+		int propSpeed = (prop * 2) + (integ / 6500) + (deriv * 23);
 		
 		//set our last run time
 		last = now;
@@ -223,13 +182,13 @@ int main() {
 		//make sure the motors are never off / going negative
 		if (left <= 0) {
 			int diff = 0 - left;
-			right += diff - 10;
-			left = 10;
+			right += diff - 30;
+			left = 30;
 		}
 		if (right <= 0) {
 			int diff = 0 - right;
-			left += diff - 10;
-			right = 10;	
+			left += diff - 30;
+			right = 30;	
 		}
 		
 		//limit the motors to their maxes
@@ -239,8 +198,7 @@ int main() {
 			right = 255;
 		
 		lastProp = prop;
-
+		
 		set_motors(left, right);
-		delay_ms(1);
 	}
 }
