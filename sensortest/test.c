@@ -26,21 +26,23 @@ void update_bounds(const unsigned int *s, unsigned int *minv, unsigned int *maxv
 
 //Calibrates the sensor
 void calibrate(unsigned int *sensors, unsigned int *minv, unsigned int *maxv) {
-	//give instructions
+	//say something to the user
 	clear();
 	lcd_goto_xy(0, 0);
-	print("Fluffy");
+	print(" Fluffy");
 	lcd_goto_xy(0, 1);
-	print("hates #s");
+	print("A=Go!");
 	
+	//wait on the calibration button
 	wait_for_button_press(BUTTON_A);
 	
+	//wait for the user to move his hand
 	delay_ms(500);
 
 	//activate the motors
 	set_motors(40, -40);
 	
-	//take 20 readings from the sensors, that should be enough to calibrate
+	//take 165 readings from the sensors...why not?
 	int i;
 	for (i = 0; i < 165; i++) {
 		read_line_sensors(sensors, IR_EMITTERS_ON);
@@ -54,17 +56,31 @@ void calibrate(unsigned int *sensors, unsigned int *minv, unsigned int *maxv) {
 	delay_ms(750);
 }
 
+//since we use this in multiple places, just make it easier to get to
+int getCalibratedSensor(unsigned int s, unsigned int min, unsigned int max) {
+	//cast everything...for some reason, without all these explicit casts, nothing calculates correctly.
+	return ((long)(((int)((int)s - (int)min)) * 100)) / (max - min);
+}
+
 //return line position
 int line_position(unsigned int *sensors, unsigned int *minv, unsigned int *maxv, int *range) {
+	//a temporary value to hold our current readings in INT form
 	int s[5];
-	unsigned long i, avg = 0, sum = 0;
+	
+	//for iterating
+	int i;
+	
+	//for doing calculations -- make sure there is no overflow
+	unsigned long avg = 0, sum = 0;
+	
+	//if we have seen the line, default to "no"
 	char seen = 0;
 	
+	//hold our last value of this function, in case we lose the line
 	static int last = 0;
 	
 	for (i = 0; i < 5; i++) {
-		s[i] = (int)((int)sensors[i] - (int)minv[i]);
-		s[i] = ((long)(s[i] * 100)) / (maxv[i] - minv[i]);
+		s[i] = getCalibratedSensor(sensors[i], minv[i], maxv[i]);
 		
 		//if above 100, reset!
 		if (s[i] >= 100)
@@ -89,6 +105,7 @@ int line_position(unsigned int *sensors, unsigned int *minv, unsigned int *maxv,
 	
 		//if we're seeing something
 		if (s[i] > 20) {
+			//again, casting here is necessary...otherwise, it has all sorts of fun...
 			avg += (long)((long)s[i] * vals[i]);
 			sum += s[i];
 		}
@@ -107,13 +124,13 @@ int line_position(unsigned int *sensors, unsigned int *minv, unsigned int *maxv,
 //This is the main function, where the code starts.  All C programs
 //must have a main() function defined somewhere.
 int main() {
-	//global array to hold sensor values
+	//holds sensor values
 	unsigned int sensors[5];
 	
-	//global arrays to hold min and max sensor values
-	//for calibration
+	//hold min and max sensor values for calibration
 	unsigned int minv[5] = {65500, 65500, 65500, 65500, 65500}, maxv[5] = {0, 0, 0, 0, 0};
 	
+	//holds the previous value so that we can make sure the sensor didn't report a crap value
 	int range[5];
 	 
 	//set up the 3pi
@@ -122,11 +139,10 @@ int main() {
 	//calibrate the stuff
 	calibrate(sensors, minv, maxv);
 	
+	//set our range from our calibrated readings so that it doesn't break the other readings when we start moving
 	int i;
-	for (i = 0; i < 5; i++) {
-		range[i] = (int)((int)sensors[i] - (int)minv[i]);
-		range[i] = ((long)(range[i] * 100)) / (maxv[i] - minv[i]);
-	}
+	for (i = 0; i < 5; i++)
+		range[i] = getCalibratedSensor(sensors[i], minv[i], maxv[i]);
 
 	//set the speed
 	int const speed = 255;
