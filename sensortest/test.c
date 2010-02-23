@@ -1,20 +1,31 @@
 /*
-  3PI template code for NYU "Intro to Robotics" course.
-  Yann LeCun, 02/2009.
-  This program was modified from an example program from Pololu. 
- */
+Andrew Stone
+Stanley Dady
 
-// The 3pi include file must be at the beginning of any program that
-// uses the Pololu AVR library and 3pi.
+NYU, Robotics - Spring 2010
+
+Dead Reckoning
+*/
+
+//The 3pi include file must be at the beginning of any program that
+//uses the Pololu AVR library and 3pi.
 #include <pololu/3pi.h>
 
-// This include file allows data to be stored in program space.  The
-// ATmega168 has 16k of program space compared to 1k of RAM, so large
-// pieces of static data should be stored in program space.
+//This include file allows data to be stored in program space.  The
+//ATmega168 has 16k of program space compared to 1k of RAM, so large
+//pieces of static data should be stored in program space.
 #include <avr/pgmspace.h>
+
+//stuff for running
+#include "3pi_kimenatics.h"
+
+#include <math.h>
 
 //sensor values
 int const vals[5] = {0, 125, 250, 375, 500};
+
+//if we are on the line, default to yes so that we follow from the start
+char seen = 1;
 
 void update_bounds(const unsigned int *s, unsigned int *minv, unsigned int *maxv) {
 	int i;
@@ -56,6 +67,32 @@ void calibrate(unsigned int *sensors, unsigned int *minv, unsigned int *maxv) {
 	delay_ms(750);
 }
 
+//updates the position we think our robot is at (given our left and right motor speeds for nice calculations)
+//everything using DT is divided by 1000 to get it back into milliseconds
+void updatePosition(int left, int right, long dt, long *homeX, long *homeY) {
+	//alpha = (theta_i + theta_(i+1)) / 2
+	//theta_(i+1) = theta_i + dt + motor2angle
+	//x_(i+1) = motor2speed * dt * sin(alpha) + x_i
+	//y_(i+1) = motor2speed * dt * cos(alpha) + y_i
+
+	//get the current angle we are heading on
+	static int lastTheta = 0, lastX = 0, lastY = 0;
+	
+	long theta = lastTheta + ((dt * motor2angle(left, right)) / 1000);
+	
+	int avg = (left + right) / 2;
+	long alpha = (lastTheta + theta) / 2;
+	long x = ((motor2speed(avg) * dt * Sin(alpha)) / 1000) + lastX;
+	long y = ((motor2speed(avg) * dt * Cos(alpha)) / 1000) + lastY;
+	
+	homeX += x;
+	homeY += y;
+	
+	lastTheta = theta;
+	lastX = x;
+	lastY = y;
+}
+
 //since we use this in multiple places, just make it easier to get to
 int getCalibratedSensor(unsigned int s, unsigned int min, unsigned int max) {
 	//cast everything...for some reason, without all these explicit casts, nothing calculates correctly.
@@ -72,9 +109,6 @@ int line_position(unsigned int *sensors, unsigned int *minv, unsigned int *maxv,
 	
 	//for doing calculations -- make sure there is no overflow
 	unsigned long avg = 0, sum = 0;
-	
-	//if we have seen the line, default to "no"
-	char seen = 0;
 	
 	//hold our last value of this function, in case we lose the line
 	static int last = 0;
@@ -98,10 +132,12 @@ int line_position(unsigned int *sensors, unsigned int *minv, unsigned int *maxv,
 		range[i] = s[i];
 	}
 	
+	char seenThisRound = 0;
+	
 	for (i = 0; i < 5; i++) {
 		//did we see the line? or should we make a sharp turn to try to find it again?
 		if (s[i] > 35)
-			seen = 1;
+			seenThisRound = 1;
 	
 		//if we're seeing something
 		if (s[i] > 20) {
@@ -111,11 +147,10 @@ int line_position(unsigned int *sensors, unsigned int *minv, unsigned int *maxv,
 		}
 	}
 	
-	if (!seen) {
-		if (last >= 250)
-			return 500;
-		else
-			return 0;
+	seen = seenThisRound;
+	
+	if (!seenThisRound) {
+		return last;
 	}
 	
 	return last = avg / sum;
@@ -145,7 +180,7 @@ int main() {
 		range[i] = getCalibratedSensor(sensors[i], minv[i], maxv[i]);
 
 	//set the speed
-	int const speed = 255;
+	int const speed = 40;
 
 	//holds the deriv
 	int deriv;
@@ -159,10 +194,15 @@ int main() {
 	//line position relative to center
 	int position = 0;
 	
+	int lastLeft, lastRight;
+	
 	long last = millis();
 	
+	//holds the current x and y positions (distance from home)
+	long *x = 0, *y = 0;
+	
 	//run in circles
-	while(1) {
+	while(seen) {
 		//read the line sensor values
 		read_line_sensors(sensors, IR_EMITTERS_ON);
 		
@@ -215,6 +255,23 @@ int main() {
 		
 		lastProp = prop;
 		
+		//save the last motor speeds for change in direction calculations
+		lastLeft = left;
+		lastRight = right;
+		
+		//update our guestimate of the position of the robot
+		updatePosition(left, right, diff, x, y);
+
 		set_motors(left, right);
 	}
+	
+	//once we get here, we are sure that we didn't see the line, so stop
+	set_motors(0, 0);
+	clear();
+	print("Lost");
+	
+	delay_ms(2000);
+	
+	//use pythy for hypothenuse
+	long hypot = sqrt(pow(*x, 2) + pow(*y, 2));
 }
