@@ -24,6 +24,9 @@ Dead Reckoning
 //sensor values
 int const vals[5] = {0, 125, 250, 375, 500};
 
+long homeX = 0, homeY = 0;
+
+
 //if we are on the line, default to yes so that we follow from the start
 char seen = 1;
 
@@ -69,28 +72,25 @@ void calibrate(unsigned int *sensors, unsigned int *minv, unsigned int *maxv) {
 
 //updates the position we think our robot is at (given our left and right motor speeds for nice calculations)
 //everything using DT is divided by 1000 to get it back into milliseconds
-void updatePosition(int left, int right, long dt, long *homeX, long *homeY) {
+void updatePosition(int left, int right, long dt) {
 	//alpha = (theta_i + theta_(i+1)) / 2
 	//theta_(i+1) = theta_i + dt + motor2angle
 	//x_(i+1) = motor2speed * dt * sin(alpha) + x_i
 	//y_(i+1) = motor2speed * dt * cos(alpha) + y_i
 
 	//get the current angle we are heading on
-	static int lastTheta = 0, lastX = 0, lastY = 0;
+	static int lastTheta = 0;
 	
-	long theta = lastTheta + ((dt * motor2angle(left, right)) / 1000);
+	static int i = 0;
+	
+	long theta = lastTheta + ((dt * (motor2angle(left, right))));
 	
 	int avg = (left + right) / 2;
 	long alpha = (lastTheta + theta) / 2;
-	long x = ((motor2speed(avg) * dt * Sin(alpha)) / 1000) + lastX;
-	long y = ((motor2speed(avg) * dt * Cos(alpha)) / 1000) + lastY;
-	
-	homeX += x;
-	homeY += y;
+	homeX += ((motor2speed(avg) * dt * Sin(alpha)) / 1000000);
+	homeY += ((motor2speed(avg) * dt * Cos(alpha)) / 1000000);
 	
 	lastTheta = theta;
-	lastX = x;
-	lastY = y;
 }
 
 //since we use this in multiple places, just make it easier to get to
@@ -135,8 +135,8 @@ int line_position(unsigned int *sensors, unsigned int *minv, unsigned int *maxv,
 	char seenThisRound = 0;
 	
 	for (i = 0; i < 5; i++) {
-		//did we see the line? or should we make a sharp turn to try to find it again?
-		if (s[i] > 35)
+		//did we see the line?
+		if (s[i] > 10)
 			seenThisRound = 1;
 	
 		//if we're seeing something
@@ -180,7 +180,7 @@ int main() {
 		range[i] = getCalibratedSensor(sensors[i], minv[i], maxv[i]);
 
 	//set the speed
-	int const speed = 40;
+	int const speed = 20;
 
 	//holds the deriv
 	int deriv;
@@ -197,9 +197,6 @@ int main() {
 	int lastLeft, lastRight;
 	
 	long last = millis();
-	
-	//holds the current x and y positions (distance from home)
-	long *x = 0, *y = 0;
 	
 	//run in circles
 	while(seen) {
@@ -226,7 +223,7 @@ int main() {
 			integ += prop * diff;
 		
 		//get a proportional speed
-		int propSpeed = (prop * 2) + (integ / 6500) + (deriv * 23);
+		int propSpeed = (prop * 2) + (integ / 1000) + (deriv * 10);
 		
 		//set our last run time
 		last = now;
@@ -238,20 +235,20 @@ int main() {
 		//make sure the motors are never off / going negative
 		if (left <= 0) {
 			int diff = 0 - left;
-			right += diff - 30;
-			left = 30;
+			right += diff - 20;
+			left = 20;
 		}
 		if (right <= 0) {
 			int diff = 0 - right;
-			left += diff - 30;
-			right = 30;	
+			left += diff - 20;
+			right = 20;	
 		}
 		
 		//limit the motors to their maxes
-		if (left > 255)
-			left = 255;
-		if (right > 255)
-			right = 255;
+		if (left > 100)
+			left = 100;
+		if (right > 100)
+			right = 100;
 		
 		lastProp = prop;
 		
@@ -260,7 +257,7 @@ int main() {
 		lastRight = right;
 		
 		//update our guestimate of the position of the robot
-		updatePosition(left, right, diff, x, y);
+		updatePosition(left, right, diff);
 
 		set_motors(left, right);
 	}
@@ -273,5 +270,9 @@ int main() {
 	delay_ms(2000);
 	
 	//use pythy for hypothenuse
-	long hypot = sqrt(pow(*x, 2) + pow(*y, 2));
+	//long hypot = sqrt(pow(*x, 2) + pow(*y, 2));
+	clear();
+	print_long(homeX);
+	lcd_goto_xy(0, 1);
+	print_long(homeY);
 }
