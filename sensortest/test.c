@@ -26,6 +26,8 @@ int const vals[5] = {0, 125, 250, 375, 500};
 
 long homeX = 0, homeY = 0;
 
+//get the current angle we are heading on
+int lastTheta = 0;
 
 //if we are on the line, default to yes so that we follow from the start
 char seen = 1;
@@ -78,17 +80,21 @@ void updatePosition(int left, int right, long dt) {
 	//x_(i+1) = motor2speed * dt * sin(alpha) + x_i
 	//y_(i+1) = motor2speed * dt * cos(alpha) + y_i
 
-	//get the current angle we are heading on
-	static int lastTheta = 0;
-	
 	static int i = 0;
+
+	long theta = dt * (motor2angle(left, right));
 	
-	long theta = lastTheta + ((dt * (motor2angle(left, right))));
+	if (i++ % 100 == 0) {
+		clear();
+		print_long(left);
+		lcd_goto_xy(0, 1);
+		print_long(right);
+	}
 	
 	int avg = (left + right) / 2;
 	long alpha = (lastTheta + theta) / 2;
-	homeX += ((motor2speed(avg) * dt * Sin(alpha)) / 1000000);
-	homeY += ((motor2speed(avg) * dt * Cos(alpha)) / 1000000);
+	homeX += ((motor2speed(avg) * dt * Cos(alpha)) / 1000000);
+	homeY += ((motor2speed(avg) * dt * Sin(alpha)) / 1000000);
 	
 	lastTheta = theta;
 }
@@ -180,7 +186,7 @@ int main() {
 		range[i] = getCalibratedSensor(sensors[i], minv[i], maxv[i]);
 
 	//set the speed
-	int const speed = 20;
+	int const speed = 30;
 
 	//holds the deriv
 	int deriv;
@@ -223,7 +229,7 @@ int main() {
 			integ += prop * diff;
 		
 		//get a proportional speed
-		int propSpeed = (prop * 2) + (integ / 1000) + (deriv * 10);
+		int propSpeed = (prop) + (integ / 975) + (deriv * 6);
 		
 		//set our last run time
 		last = now;
