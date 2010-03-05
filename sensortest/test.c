@@ -27,7 +27,7 @@ int const vals[5] = {0, 125, 250, 375, 500};
 long homeX = 0, homeY = 0;
 
 //get the current angle we are heading on
-int lastTheta = 0;
+long lastTheta = 0;
 
 //if we are on the line, default to yes so that we follow from the start
 char seen = 1;
@@ -84,18 +84,26 @@ void updatePosition(int left, int right, long dt) {
 
 	long theta = dt * (motor2angle(left, right));
 	
-	if (i++ % 100 == 0) {
+	/*if (i++ % 100 == 0) {
 		clear();
 		print_long(left);
 		lcd_goto_xy(0, 1);
 		print_long(right);
-	}
+	}*/
 	
 	int avg = (left + right) / 2;
 	long alpha = (lastTheta + theta) / 2;
-	homeX += ((motor2speed(avg) * dt * Cos(alpha)) / 1000000);
-	homeY += ((motor2speed(avg) * dt * Sin(alpha)) / 1000000);
+	long m2s = motor2speed(avg);
+	homeY += ((m2s * dt * Cos(alpha)) / 1000);
+	homeX += ((m2s * dt * Sin(alpha)) / 1000);
 	
+	if (i++ % 100 == 0) {
+		clear();
+		print_long(homeX);
+		lcd_goto_xy(0, 1);
+		print_long(homeY);
+	}
+
 	lastTheta = theta;
 }
 
@@ -240,13 +248,11 @@ int main() {
 		
 		//make sure the motors are never off / going negative
 		if (left <= 0) {
-			int diff = 0 - left;
-			right += diff - 20;
+			right += (0 - left) - 20;
 			left = 20;
 		}
 		if (right <= 0) {
-			int diff = 0 - right;
-			left += diff - 20;
+			left += (0 - right) - 20;
 			right = 20;	
 		}
 		
@@ -258,14 +264,14 @@ int main() {
 		
 		lastProp = prop;
 		
-		//save the last motor speeds for change in direction calculations
-		lastLeft = left;
-		lastRight = right;
-		
 		//update our guestimate of the position of the robot
 		updatePosition(left, right, diff);
 
 		set_motors(left, right);
+
+		//save the last motor speeds for change in direction calculations
+		lastLeft = left;
+		lastRight = right;
 	}
 	
 	//once we get here, we are sure that we didn't see the line, so stop
@@ -274,11 +280,13 @@ int main() {
 	print("Lost");
 	
 	delay_ms(2000);
-	
+	i =0;
+
 	//use pythy for hypothenuse
 	//long hypot = sqrt(pow(*x, 2) + pow(*y, 2));
 	clear();
 	print_long(homeX);
 	lcd_goto_xy(0, 1);
 	print_long(homeY);
+
 }
