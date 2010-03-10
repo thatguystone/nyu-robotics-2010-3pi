@@ -127,9 +127,8 @@ long Tan(long angle) {
 // your mileage (or millimeterage) may vary.
 long motor2speed(int v) {
   // v*4.7682 - 33 mm/s
-  long tmp = 40000;
-  long tmp2 = 1020;
-  int r = ( (v>0)?v:-v )*(tmp/tmp2) - a630;
+  long tmp = 4545;
+  int r = ( (v>0)?v:-v )*((tmp * 10) / c1000) - a630;
   r = (r>0)?r:0;
   if (v>=0) {
     return (long)(r);
@@ -148,7 +147,7 @@ long motor2angle(int ml, int mr) {
   // w: width of the robot in 1/10th of mm
   long vl = motor2speed(ml);
   long vr = motor2speed(mr);
-  long tmp = 150;
+  long tmp = 400;
   return (vl-vr)*tmp/c5152;
 }
 

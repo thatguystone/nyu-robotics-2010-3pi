@@ -155,18 +155,20 @@ void goHome() {
 	//adjusting the constants screwed up all the other calculations...so adjust here.
 	homeX /= 4;
 	homeY /= 4;
+	theta /= 1000;
 	
 	//dramatic pause
 	delay_ms(2000);
 	
 	//tell the user what we're doing...
-	clear();
+	/*clear();
 	print("Going");
 	lcd_goto_xy(0, 1);
 	print("home!");
+	*/
 	
 	//calculate the time angle to turn at and the time to wait for this turn
-	int thetaToHome = (180 - atan(homeY / homeX));
+	int thetaToHome = (theta < 0 ? 180 - theta : 180 + (90 -  theta));
 	int wait = angle2time(thetaToHome);
 	
 	//start turning...
@@ -177,9 +179,6 @@ void goHome() {
 	//and find out how long it takes to get home and how far we need to go
 	int dist = sqrt((homeX*homeX) + (homeY*homeY)); //pow() doesn't work?
 	wait = distance2time(dist);
-	
-	clear();
-	print_long(wait);
 	
 	//go home!
 	set_motors(30, 30);
@@ -297,6 +296,18 @@ int main() {
 	set_motors(0, 0);
 	clear();
 	print("Lost");
+	
+	clear();
+	print_long(homeX);
+	
+	lcd_goto_xy(4, 0);
+	print_long(theta);
+	lcd_goto_xy(4, 1);
+	print_long(theta / 1000);
+	
+	lcd_goto_xy(0, 1);
+	print_long(homeY);
+	delay_ms(1000);
 	
 	goHome();
 	
