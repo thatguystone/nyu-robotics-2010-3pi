@@ -178,7 +178,7 @@ void goHome() {
 	
 	//and find out how long it takes to get home and how far we need to go
 	int dist = sqrt((homeX*homeX) + (homeY*homeY)); //pow() doesn't work?
-	wait = distance2time(dist);
+	wait = distance2time(dist - 20);
 	
 	//go home!
 	set_motors(30, 30);

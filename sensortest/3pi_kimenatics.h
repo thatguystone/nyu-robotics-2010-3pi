@@ -147,7 +147,7 @@ long motor2angle(int ml, int mr) {
   // w: width of the robot in 1/10th of mm
   long vl = motor2speed(ml);
   long vr = motor2speed(mr);
-  long tmp = 400;
+  long tmp = 300;
   return (vl-vr)*tmp/c5152;
 }
 
