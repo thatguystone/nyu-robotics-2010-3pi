@@ -12,6 +12,10 @@ long c1000 = 1000;
 long c5152 = 5152;
 long cmillion = 1000000;
 
+long a950 = 950;
+long a130 = 130;
+long a1000 = 1000;
+
 // width of the robot in 1/10 of a millimiter.
 // (distance between the two weels)
 long robot_width = 820;
@@ -101,6 +105,10 @@ long Cos(long angle) {
   return (long)( (int)pgm_read_word(cos_table + (angle % c360)) - 1000 );
 }
 
+long Tan(long angle) {
+	return (Sin(angle) * 1000) / Cos(angle);
+}
+
 ////////////////////////////////////////////////////////////////
 // Functions to convert motor speed to linear and rotational speeds
 // The good news is that experiments show the relationship
@@ -141,6 +149,14 @@ long motor2angle(int ml, int mr) {
   return (vl-vr)*360/5152;
 }
 
+int angle2time(int angle) {
+	//130°/sec @ speed 30
+	return (angle * a1000) / a130;
+}
+
+int distance2time(int distance) {
+	return (distance * a1000) / a950;
+}
 
 ////////////////////////////////////////////////////////////////
 // OBSOLETE FUNCTION

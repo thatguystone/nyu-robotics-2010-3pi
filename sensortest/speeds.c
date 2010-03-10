@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 
 long motor2speed(int v) {
   // v*4.7682 - 33 mm/s
@@ -27,6 +28,16 @@ long motor2angle(int ml, int mr) {
   return (vl-vr)*2/30;
 }
 
+int angle2time(int angle) {
+	//130°/sec @ speed 30
+	return (angle * 1000) / 130;
+}
+
+int distance2time(int distance) {
+	return (distance * 1000) / 950;
+}
+
 int main() {
-	printf("(%d, %d) - %d \n", motor2speed(30), motor2speed(20), motor2angle(30, 0));
+	int dist = sqrt(pow(-23, 2) + pow(557, 2));
+	printf("%d - %d \n", dist, distance2time(dist));
 }
