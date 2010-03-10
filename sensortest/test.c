@@ -6,7 +6,6 @@ NYU, Robotics - Spring 2010
 
 Dead Reckoning
 */
-
 //The 3pi include file must be at the beginning of any program that
 //uses the Pololu AVR library and 3pi.
 #include <pololu/3pi.h>
@@ -19,66 +18,20 @@ Dead Reckoning
 //stuff for running
 #include "3pi_kimenatics.h"
 
+//for doing math at the end...when we're not moving...so it can take its time.
 #include <math.h>
 
 //sensor values
 int const vals[5] = {0, 125, 250, 375, 500};
 
+//hold our current position
 long homeX, homeY;
 
 //get the current angle we are heading on
-long lastTheta, alpha, tAlpha, theta;
+long lastTheta, alpha, theta;
 
 //if we are on the line, default to yes so that we follow from the start
 char seen = 1;
-
-const char levels[] PROGMEM = {
-	0b00000,
-	0b00000,
-	0b00000,
-	0b00000,
-	0b00000,
-	0b00000,
-	0b00000,
-	0b11111,
-	0b11111,
-	0b11111,
-	0b11111,
-	0b11111,
-	0b11111,
-	0b11111
-};
-
-char display_characters[9] = { ' ', 0, 1, 2, 3, 4, 5, 6, 255 };
-
-// This function loads custom characters into the LCD.  Up to 8
-// characters can be loaded; we use them for 7 levels of a bar graph.
-void load_custom_characters() {
-	lcd_load_custom_character(levels+0,0); // no offset, e.g. one bar
-	lcd_load_custom_character(levels+1,1); // two bars
-	lcd_load_custom_character(levels+2,2); // etc...
-	lcd_load_custom_character(levels+3,3);
-	lcd_load_custom_character(levels+4,4);
-	lcd_load_custom_character(levels+5,5);
-	lcd_load_custom_character(levels+6,6);
-	clear(); // the LCD must be cleared for the characters to take effect
-}
-
-// This function displays the sensor readings using a bar graph.
-void display_bars(const unsigned int *s, const unsigned int *minv, const unsigned int* maxv) {
-	// Initialize the array of characters that we will use for the
-	// graph.  Using the space, and character 255 (a full black box).
-	
-	lcd_goto_xy(0,1);
-	
-	unsigned char i;
-	for (i=0;i<5;i++) {
-		int c = ((int)s[i]-(int)minv[i])*9/((int)maxv[i]-(int)minv[i]);
-		c = (c<0)?0:(c>8)?8:c;
-		// if (i==0) {print_long(s[0]); print_long(c); }
-		print_character(display_characters[c]);
-	}
-}
 
 void update_bounds(const unsigned int *s, unsigned int *minv, unsigned int *maxv) {
 	int i;
@@ -117,40 +70,43 @@ void calibrate(unsigned int *sensors, unsigned int *minv, unsigned int *maxv) {
 	//and turn the motors off, we're done
 	set_motors(0, 0);
 	
-	delay_ms(750);
+	//delay_ms(750);
 }
 
 //updates the position we think our robot is at (given our left and right motor speeds for nice calculations)
 //everything using DT is divided by 1000 to get it back into milliseconds
 void updatePosition(int left, int right, long dt) {
-	//alpha = (theta_i + theta_(i+1)) / 2
-	//theta_(i+1) = theta_i + dt * motor2angle
-	//x_(i+1) = motor2speed * dt * sin(alpha) + x_i
-	//y_(i+1) = motor2speed * dt * cos(alpha) + y_i
-
-	static int i = 0;
-	
     theta += dt * motor2angle(left, right);
 	
 	alpha = (lastTheta + theta) / c2;
-	int m2s = motor2speed((left + right) / c2);
-    homeX += (m2s * dt * Sin(alpha / 1000)) / cmillion;
-    homeY += (m2s * dt * Cos(alpha / 1000)) / cmillion;
+	int m2s = motor2speed((left + right) / c2) * dt;
+	homeX += (m2s * Sin(alpha / c1000)) / cmillion;
+	homeY += (m2s * Cos(alpha / c1000)) / cmillion;
 	
 	lastTheta = theta;
-	
-	if (i++ % 200 == 0) {
-		clear();
-		print_long(motor2angle(left, right));
-		lcd_goto_xy(0, 1);
-		print_long(theta);
-	}
 }
 
 //since we use this in multiple places, just make it easier to get to
-int getCalibratedSensor(unsigned int s, unsigned int min, unsigned int max) {
+inline int getCalibratedSensor(unsigned int s, unsigned int min, unsigned int max, int *range) {
 	//cast everything...for some reason, without all these explicit casts, nothing calculates correctly.
-	return ((long)(((int)((int)s - (int)min)) * 100)) / (max - min);
+	int reading = ((long)(((int)((int)s - (int)min)) * 100)) / (max - min);
+	
+	//if above 100, reset!
+	if (reading >= 100)
+		reading = 100;
+	
+	//if the reading is below 0, reset!
+	if (reading < 0)
+		reading = 0;
+	
+	//if we get a crap reading (ie. it jumps too far in one direction), ignore it
+	if (*range > 1 && (reading < (*range - 30) || reading > (*range + 30)))
+		reading = *range;
+	
+	//save our last reading for our range
+	*range = reading;
+	
+	return reading;
 }
 
 //return line position
@@ -167,24 +123,8 @@ int line_position(unsigned int *sensors, unsigned int *minv, unsigned int *maxv,
 	//hold our last value of this function, in case we lose the line
 	static int last = 0;
 	
-	for (i = 0; i < 5; i++) {
-		s[i] = getCalibratedSensor(sensors[i], minv[i], maxv[i]);
-		
-		//if above 100, reset!
-		if (s[i] >= 100)
-			s[i] = 100;
-		
-		//if the reading is below 0, reset!
-		if (s[i] < 0)
-			s[i] = 0;
-		
-		//if we get a crap reading (ie. it jumps too far in one direction), ignore it
-		if (s[i] < (range[i] - 30) || s[i] > (range[i] + 30))
-			s[i] = range[i];
-		
-		//save our last reading for our range
-		range[i] = s[i];
-	}
+	for (i = 0; i < 5; i++)
+		s[i] = getCalibratedSensor(sensors[i], minv[i], maxv[i], &range[i]);
 	
 	char seenThisRound = 0;
 	
@@ -210,6 +150,43 @@ int line_position(unsigned int *sensors, unsigned int *minv, unsigned int *maxv,
 	return last = avg / sum;
 }
 
+void goHome() {
+	//these values appear to be 4 times larger than what they should be...
+	//adjusting the constants screwed up all the other calculations...so adjust here.
+	homeX /= 4;
+	homeY /= 4;
+	
+	//dramatic pause
+	delay_ms(2000);
+	
+	//tell the user what we're doing...
+	clear();
+	print("Going");
+	lcd_goto_xy(0, 1);
+	print("home!");
+	
+	//calculate the time angle to turn at and the time to wait for this turn
+	int thetaToHome = (180 - atan(homeY / homeX));
+	int wait = angle2time(thetaToHome);
+	
+	//start turning...
+	set_motors(-30, 30);
+	delay_ms(wait);
+	set_motors(0, 0);
+	
+	//and find out how long it takes to get home and how far we need to go
+	int dist = sqrt((homeX*homeX) + (homeY*homeY)); //pow() doesn't work?
+	wait = distance2time(dist);
+	
+	clear();
+	print_long(wait);
+	
+	//go home!
+	set_motors(30, 30);
+	delay_ms(wait);
+	set_motors(0, 0);
+}
+
 //This is the main function, where the code starts.  All C programs
 //must have a main() function defined somewhere.
 int main() {
@@ -220,14 +197,14 @@ int main() {
 	unsigned int minv[5] = {65500, 65500, 65500, 65500, 65500}, maxv[5] = {0, 0, 0, 0, 0};
 	
 	//holds the previous value so that we can make sure the sensor didn't report a crap value
-	int range[5];
+	int range[5] = {-1, -1, -1, -1, -1};
 	
+	//reset everything...(seems like there's a bug with multiple equals, but didn't test it too much...could just be me)
 	seen = 1;
 	homeX = 0;
 	homeY = 0;
 	lastTheta = 0;
 	alpha = 0;
-	tAlpha = 0;
 	theta = 0;
 	 
 	//set up the 3pi
@@ -239,7 +216,7 @@ int main() {
 	//set our range from our calibrated readings so that it doesn't break the other readings when we start moving
 	int i;
 	for (i = 0; i < 5; i++)
-		range[i] = getCalibratedSensor(sensors[i], minv[i], maxv[i]);
+		range[i] = getCalibratedSensor(sensors[i], minv[i], maxv[i], &range[i]);
 
 	//set the speed
 	int const speed = 30;
@@ -257,15 +234,6 @@ int main() {
 	int position = 0;
 	
 	long last = millis();
-	
-	/*
-	load_custom_characters();
-	while (1) {
-		read_line_sensors(sensors, IR_EMITTERS_ON);
-		position = line_position(sensors, minv, maxv, range);
-		display_bars(sensors, minv, maxv);
-	}
-	*/
 	
 	//run in circles
 	while (seen) {
@@ -303,12 +271,12 @@ int main() {
 		
 		//make sure the motors are never off / going negative
 		if (left <= 0) {
-			right += (0 - left) - 20;
-			left = 20;
+			right += (0 - left) - 25;
+			left = 25;
 		}
 		if (right <= 0) {
-			left += (0 - right) - 20;
-			right = 20;	
+			left += (0 - right) - 25;
+			right = 25;	
 		}
 		
 		//limit the motors to their maxes
@@ -330,36 +298,7 @@ int main() {
 	clear();
 	print("Lost");
 	
-	delay_ms(1000);
-	
-	clear();
-	print_long(homeX);
-	lcd_goto_xy(4, 0);
-	print_long(alpha);
-	lcd_goto_xy(0, 1);
-	print_long(homeY);
-	lcd_goto_xy(4, 1);
-	print_long(theta);
-	
-	while (1);
-	
-	//go home
-	int thetaToHome = (180 - Tan(homeY / homeX));
-	int wait = angle2time(thetaToHome);
-	
-	//start turning...
-	set_motors(30, -30);
-	delay_ms(wait);
-	set_motors(0, 0);
-	
-	//and find out how long it takes to get home
-	int dist = sqrt(pow(homeX, 2) + pow(homeY, 2));
-	
-	wait = distance2time(dist);
-	
-	set_motors(30, 30);
-	delay_ms(wait);
-	set_motors(0, 0);
+	goHome();
 	
 	while (1);
 }

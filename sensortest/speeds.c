@@ -39,5 +39,5 @@ int distance2time(int distance) {
 
 int main() {
 	int dist = sqrt(pow(-23, 2) + pow(557, 2));
-	printf("%d - %d \n", dist, distance2time(dist));
+	printf("%f \n", (float)(2*motor2angle(32, 28)) / 1000);
 }

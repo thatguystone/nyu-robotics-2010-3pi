@@ -29,3 +29,4 @@ test.o: test.c
 
 program: $(TARGET).hex
 	$(AVRDUDE) -p $(AVRDUDE_DEVICE) -c avrisp2 -P $(PORT) -U flash:w:$(TARGET).hex
+	rm -f *.o *.hex *.obj *.hex

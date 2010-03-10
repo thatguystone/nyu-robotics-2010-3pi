@@ -11,8 +11,8 @@ int main() {
 	wait_for_button_press(BUTTON_A);
 	delay_ms(500);
 	
-	set_motors(30,30);
-	delay_ms(1000);
+	set_motors(255,255);
+	delay_ms(3000);
 	set_motors(0, 0);
 	
 	clear();

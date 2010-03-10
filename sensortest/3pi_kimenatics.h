@@ -12,9 +12,11 @@ long c1000 = 1000;
 long c5152 = 5152;
 long cmillion = 1000000;
 
-long a950 = 950;
+long a95 = 95;
 long a130 = 130;
-long a1000 = 1000;
+long a155 = 155;
+long a5434 = 5434;
+long a630 = 630;
 
 // width of the robot in 1/10 of a millimiter.
 // (distance between the two weels)
@@ -125,9 +127,9 @@ long Tan(long angle) {
 // your mileage (or millimeterage) may vary.
 long motor2speed(int v) {
   // v*4.7682 - 33 mm/s
-  // This is robot 493 with fully charged batteries.
-  // your mileage (millimeterage) may vary
-  int r = ( (v>0)?v:-v )*430/8 - 680;
+  long tmp = 40000;
+  long tmp2 = 1020;
+  int r = ( (v>0)?v:-v )*(tmp/tmp2) - a630;
   r = (r>0)?r:0;
   if (v>=0) {
     return (long)(r);
@@ -146,38 +148,15 @@ long motor2angle(int ml, int mr) {
   // w: width of the robot in 1/10th of mm
   long vl = motor2speed(ml);
   long vr = motor2speed(mr);
-  return (vl-vr)*360/5152;
+  long tmp = 150;
+  return (vl-vr)*tmp/c5152;
 }
 
 int angle2time(int angle) {
 	//130°/sec @ speed 30
-	return (angle * a1000) / a130;
+	return (angle * c1000) / a130;
 }
 
 int distance2time(int distance) {
-	return (distance * a1000) / a950;
-}
-
-////////////////////////////////////////////////////////////////
-// OBSOLETE FUNCTION
-// converts 1/2 of the speed difference between 
-// motors to a rotational speed in degrees per second
-// This is for robot 493 with fully charged batteries.
-// In other words, if the left wheel is set to v
-// and the right wheel speed to -v, this will return
-// the number of degrees turned in 1 second when the
-// robot is turning in place.
-// THERE IS NO REAL REASON TO USE THIS FUNCTION
-// rather than motor2angle().
-long motor2angle_inplace(int v) {
-  // a = v*6.5632 - 39.6316
-  // This is robot 493 with fully charged batteries.
-  // your mileage may vary
-  int r = ((v<0)?-v:v)*197/30 - 40;
-  r = (r>0)?r:0;
-  if (v >= 0) {
-    return (long)(r);
-  } else {
-    return (long)(-r);
-  }
+	return (distance * c1000) / a95;
 }
