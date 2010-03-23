@@ -30,6 +30,10 @@ long homeX, homeY;
 //get the current angle we are heading on
 long lastTheta, alpha, theta;
 
+//during the first few moves, we might screw up our readings (from calibrate, we weren't facing the track dead on)
+//so we're going to save them and subtract them off later to get a more accurate read.
+long firstTheta = 0;
+
 //if we are on the line, default to yes so that we follow from the start
 char seen = 1;
 
@@ -69,8 +73,6 @@ void calibrate(unsigned int *sensors, unsigned int *minv, unsigned int *maxv) {
 
 	//and turn the motors off, we're done
 	set_motors(0, 0);
-	
-	//delay_ms(750);
 }
 
 //updates the position we think our robot is at (given our left and right motor speeds for nice calculations)
@@ -78,10 +80,21 @@ void calibrate(unsigned int *sensors, unsigned int *minv, unsigned int *maxv) {
 void updatePosition(int left, int right, long dt) {
     theta += dt * motor2angle(left, right);
 	
+	static int i = 0;
+	
 	alpha = (lastTheta + theta) / c2;
 	int m2s = motor2speed((left + right) / c2) * dt;
 	homeX += (m2s * Sin(alpha / c1000)) / cmillion;
 	homeY += (m2s * Cos(alpha / c1000)) / cmillion;
+	
+	if (i++ % 50 == 0) {
+		clear();
+		print_long(left);
+		lcd_goto_xy(0, 1);
+		print_long(right);
+		lcd_goto_xy(4, 0);
+		print_long(theta);
+	}
 	
 	lastTheta = theta;
 }
@@ -130,7 +143,7 @@ int line_position(unsigned int *sensors, unsigned int *minv, unsigned int *maxv,
 	
 	for (i = 0; i < 5; i++) {
 		//did we see the line?
-		if (s[i] > 13)
+		if (s[i] > 15)
 			seenThisRound = 1;
 	
 		//if we're seeing something
@@ -157,28 +170,58 @@ void goHome() {
 	homeY /= 4;
 	theta /= 1000;
 	
-	//dramatic pause
-	delay_ms(2000);
+	//dramatic pause...make it look like it's doing something important.
+	delay_ms(1000);
 	
 	//tell the user what we're doing...
-	/*clear();
+	clear();
 	print("Going");
 	lcd_goto_xy(0, 1);
 	print("home!");
-	*/
 	
-	//calculate the time angle to turn at and the time to wait for this turn
-	int thetaToHome = (theta < 0 ? 180 - theta : 180 + (90 -  theta));
+	//clean up our theta
+	theta -= (firstTheta / 1000);
+	
+	//how far we have to go to get home (hypot)
+	long dist = sqrt((homeX*homeX) + (homeY*homeY)); //pow() doesn't work?
+	
+	int leftDir = (theta < 0 ? -30 : 30);
+	int rightDir = -leftDir;
+	
+	//make theta positive, we've already accounted for a negative one
+	theta = abs(theta);
+	//and get it in range of 1 half-turn for going home
+	//while (theta > 180) theta -= 180;
+	
+	clear();
+	
+	int thetaToHome = 180 - theta;
+	if (theta > 90) {
+		//calculate the time angle to turn at and the time to wait for this turn
+		int angle = (int)(acos((double)homeX / dist) * ((double)180 / pi)); //acos is the only one that doesnt generate compile errors...
+		
+		lcd_goto_xy(4, 0);
+		print_long(angle);
+		
+		thetaToHome += abs(90 - angle);
+	}
+	
 	int wait = angle2time(thetaToHome);
 	
+	lcd_goto_xy(0, 0);
+	print_long(theta);
+	lcd_goto_xy(0, 1);
+	print_long(thetaToHome);
+	lcd_goto_xy(4, 1);
+	print_long((long)(firstTheta / 1000));
+	
 	//start turning...
-	set_motors(-30, 30);
+	set_motors(leftDir, rightDir);
 	delay_ms(wait);
 	set_motors(0, 0);
 	
 	//and find out how long it takes to get home and how far we need to go
-	int dist = sqrt((homeX*homeX) + (homeY*homeY)); //pow() doesn't work?
-	wait = distance2time(dist - 20);
+	wait = distance2time(dist) - 20;
 	
 	//go home!
 	set_motors(30, 30);
@@ -234,6 +277,7 @@ int main() {
 	
 	long last = millis();
 	
+	i = 0;
 	//run in circles
 	while (seen) {
 		//read the line sensor values
@@ -289,6 +333,11 @@ int main() {
 		//update our guestimate of the position of the robot
 		updatePosition(left, right, diff);
 
+		if (i < 8) {
+			firstTheta += theta;
+			i++; 
+		}
+
 		set_motors(left, right);
 	}
 	
@@ -297,19 +346,8 @@ int main() {
 	clear();
 	print("Lost");
 	
-	clear();
-	print_long(homeX);
-	
-	lcd_goto_xy(4, 0);
-	print_long(theta);
-	lcd_goto_xy(4, 1);
-	print_long(theta / 1000);
-	
-	lcd_goto_xy(0, 1);
-	print_long(homeY);
-	delay_ms(1000);
-	
 	goHome();
 	
+	//and dont run off the end of the program
 	while (1);
 }

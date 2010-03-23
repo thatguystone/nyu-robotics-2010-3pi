@@ -6,7 +6,7 @@ AVRDUDE_DEVICE ?= m168
 CFLAGS=-g -Wall -mcall-prologues -mmcu=$(DEVICE) -Os
 CC=avr-gcc
 OBJ2HEX=avr-objcopy 
-LDFLAGS=-Wl,-gc-sections -lpololu_$(DEVICE) -Wl,-relax
+LDFLAGS=-Wl,-gc-sections -lpololu_$(DEVICE) -Wl,-relax 
 
 PORT ?= /dev/ttyUSB0
 AVRDUDE=avrdude

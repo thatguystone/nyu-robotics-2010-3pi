@@ -5,8 +5,9 @@
 #define pi 3.14159265
 
 int main() {
-	double tmp = (156 * 2*pi / 844);
-	double aTan = atan((double)(156 / 844));
+	long homeX = 143;
+	long dist = 544; 
+	int asd = (int)(acos((double)homeX / dist) * ((double)180 / pi)); 
 
-	printf("%f \n", tmp);
+	printf("%d - %f\n", asd);
 }

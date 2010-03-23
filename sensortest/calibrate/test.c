@@ -3,6 +3,13 @@
 int main() {
 	pololu_3pi_init(2000);
 	
+	wait_for_button_press(BUTTON_A);
+	delay_ms(500);
+	
+	set_motors(-30, 30);
+	delay_ms(1300);
+	set_motors(0, 0);
+	
 	clear();
 	print("A-Go");
 	lcd_goto_xy(0, 1);
