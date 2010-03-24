@@ -191,20 +191,20 @@ void goHome() {
 	thetaToHome = abs(thetaToHome);
 	*/
 	
-	while (theta < 0) theta += 360;
-	while (alpha < 0) alpha += 360;
+	//while (theta < 0) theta += 360;
+	//while (alpha < 0) alpha += 360;
 	
-	if (alpha < theta) {
+	/*if (alpha < theta) {
 		if (alpha > 180)
-			thetaToHome = alpha - 180;
+			thetaToHome = alpha - 180 - theta;
 		else
-			thetaToHome = alpha + 180;
+			thetaToHome = alpha + 180 - theta;
 	} else if (alpha > theta) {
 		thetaToHome = alpha - theta + 180;
 	} else {
 		thetaToHome = 180;
-	}
-	
+	}*/
+	thetaToHome = alpha - theta + 180;
 	while (thetaToHome < 0) thetaToHome += 360;
 	
 	//calculate the time we need to wait while turning
@@ -215,9 +215,9 @@ void goHome() {
 	lcd_goto_xy(0, 1);
 	print_long(thetaToHome);
 	lcd_goto_xy(4, 0);
-	print_long(homeX);
+	print_long(alpha);
 	lcd_goto_xy(4, 1);
-	print_long(homeY);
+	//print_long(homeY);
 	
 	//start turning...
 	set_motors(dir * 30 , -dir * 30);
