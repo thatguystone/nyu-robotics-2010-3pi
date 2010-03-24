@@ -109,10 +109,6 @@ long Cos(long angle) {
   return (long)( (int)pgm_read_word(cos_table + (angle % c360)) - 1000 );
 }
 
-long Tan(long angle) {
-	return (Sin(angle) * 1000) / Cos(angle);
-}
-
 ////////////////////////////////////////////////////////////////
 // Functions to convert motor speed to linear and rotational speeds
 // The good news is that experiments show the relationship
@@ -149,7 +145,7 @@ long motor2angle(int ml, int mr) {
   // w: width of the robot in 1/10th of mm
   long vl = motor2speed(ml);
   long vr = motor2speed(mr);
-  long tmp = 400;
+  long tmp = 360;
   return (vl-vr)*tmp/c5152;
 }
 

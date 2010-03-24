@@ -79,9 +79,9 @@ void calibrate(unsigned int *sensors, unsigned int *minv, unsigned int *maxv) {
 //everything using DT is divided by 1000 to get it back into milliseconds
 void updatePosition(int left, int right, long dt) {
     theta += dt * motor2angle(left, right);
-	
-	static int i = 0;
-	
+    
+    static int i = 0;
+    
 	alpha = (lastTheta + theta) / c2;
 	int m2s = motor2speed((left + right) / c2) * dt;
 	homeX += (m2s * Sin(alpha / c1000)) / cmillion;
@@ -89,11 +89,11 @@ void updatePosition(int left, int right, long dt) {
 	
 	if (i++ % 50 == 0) {
 		clear();
-		print_long(left);
-		lcd_goto_xy(0, 1);
-		print_long(right);
+		print_long(theta / c1000);
 		lcd_goto_xy(4, 0);
-		print_long(theta);
+		//print_long(homeX);
+		lcd_goto_xy(4, 1);
+		//print_long(homeY);
 	}
 	
 	lastTheta = theta;
@@ -143,7 +143,7 @@ int line_position(unsigned int *sensors, unsigned int *minv, unsigned int *maxv,
 	
 	for (i = 0; i < 5; i++) {
 		//did we see the line?
-		if (s[i] > 15)
+		if (s[i] > 13)
 			seenThisRound = 1;
 	
 		//if we're seeing something
@@ -163,12 +163,19 @@ int line_position(unsigned int *sensors, unsigned int *minv, unsigned int *maxv,
 	return last = avg / sum;
 }
 
+inline int arcCos(long side, long dist) {
+	return (int)(acos((double)side / dist) * ((double)180 / pi)); //acos is the only one that doens't cause a compile error...
+}
+
 void goHome() {
 	//these values appear to be 4 times larger than what they should be...
 	//adjusting the constants screwed up all the other calculations...so adjust here.
 	homeX /= 4;
+	homeX -= (robot_width / 10);
 	homeY /= 4;
+	homeY -= (robot_width / 10);
 	theta /= 1000;
+	theta = (long)(theta * ((double)95/100));
 	
 	//dramatic pause...make it look like it's doing something important.
 	delay_ms(1000);
@@ -185,43 +192,54 @@ void goHome() {
 	//how far we have to go to get home (hypot)
 	long dist = sqrt((homeX*homeX) + (homeY*homeY)); //pow() doesn't work?
 	
-	int leftDir = (theta < 0 ? -30 : 30);
-	int rightDir = -leftDir;
-	
-	//make theta positive, we've already accounted for a negative one
-	theta = abs(theta);
-	//and get it in range of 1 half-turn for going home
-	//while (theta > 180) theta -= 180;
-	
-	clear();
-	
-	int thetaToHome = 180 - theta;
-	if (theta > 90) {
-		//calculate the time angle to turn at and the time to wait for this turn
-		int angle = (int)(acos((double)homeX / dist) * ((double)180 / pi)); //acos is the only one that doesnt generate compile errors...
-		
-		lcd_goto_xy(4, 0);
-		print_long(angle);
-		
-		thetaToHome += abs(90 - angle);
+	int thetaToHome;
+	int dir;
+	int angle;
+	int q;
+	//let's pick quadrants!
+	if (homeX > 0 && homeY > 0) { //Quadrant 1
+		dir = -1;
+		q = 1;
+		angle = arcCos(homeY, dist);
+		thetaToHome = -theta - 90 - angle;
+	} else if (homeX < 0 && homeY > 0) { //Quadrant 2
+		dir = 1;
+		q = 2;
+		angle = arcCos(-homeX, dist); //fake that we're in Q.1
+		thetaToHome = -theta + 90 + angle;
+	} else if (homeX < 0 && homeY < 0) { //Quadrant 3
+		dir = 1;
+		q = 3;
+		angle = arcCos(-homeY, dist);
+		thetaToHome = angle - theta;
+	} else { // if (homeX > 0 && homeY < 0) { //Quadrant 4
+		dir = -1;
+		q = 4;
+		angle = arcCos(homeY, dist);
+		thetaToHome = -theta - angle;
 	}
 	
+	thetaToHome = abs(thetaToHome);
+	
+	//calculate the time we need to wait while turning
 	int wait = angle2time(thetaToHome);
 	
-	lcd_goto_xy(0, 0);
+	clear();
 	print_long(theta);
 	lcd_goto_xy(0, 1);
-	print_long(thetaToHome);
+	print_long(q);
+	lcd_goto_xy(4, 0);
+	print_long(homeX);
 	lcd_goto_xy(4, 1);
-	print_long((long)(firstTheta / 1000));
+	print_long(homeY);
 	
 	//start turning...
-	set_motors(leftDir, rightDir);
+	set_motors(dir * 30 , -dir * 30);
 	delay_ms(wait);
 	set_motors(0, 0);
 	
 	//and find out how long it takes to get home and how far we need to go
-	wait = distance2time(dist) - 20;
+	wait = distance2time(dist);
 	
 	//go home!
 	set_motors(30, 30);
@@ -276,6 +294,12 @@ int main() {
 	int position = 0;
 	
 	long last = millis();
+	
+	//print a comical message
+	clear();
+	print("Getting");
+	lcd_goto_xy(0, 1);
+	print("lost...");
 	
 	i = 0;
 	//run in circles
@@ -333,12 +357,14 @@ int main() {
 		//update our guestimate of the position of the robot
 		updatePosition(left, right, diff);
 
-		if (i < 8) {
+		if (i < 1) {
 			firstTheta += theta;
 			i++; 
 		}
 
 		set_motors(left, right);
+		
+		delay_ms(5);
 	}
 	
 	//once we get here, we are sure that we didn't see the line, so stop
