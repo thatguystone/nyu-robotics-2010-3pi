@@ -30,10 +30,6 @@ long homeX, homeY;
 //get the current angle we are heading on
 long lastTheta, alpha, theta;
 
-//during the first few moves, we might screw up our readings (from calibrate, we weren't facing the track dead on)
-//so we're going to save them and subtract them off later to get a more accurate read.
-long firstTheta = 0;
-
 //if we are on the line, default to yes so that we follow from the start
 char seen = 1;
 
@@ -65,7 +61,7 @@ void calibrate(unsigned int *sensors, unsigned int *minv, unsigned int *maxv) {
 	
 	//take 165 readings from the sensors...why not?
 	int i;
-	for (i = 0; i < 168; i++) {
+	for (i = 0; i < 160; i++) {
 		read_line_sensors(sensors, IR_EMITTERS_ON);
 		update_bounds(sensors, minv, maxv);
 		delay_ms(10);
@@ -80,21 +76,10 @@ void calibrate(unsigned int *sensors, unsigned int *minv, unsigned int *maxv) {
 void updatePosition(int left, int right, long dt) {
     theta += dt * motor2angle(left, right);
     
-    static int i = 0;
-    
 	alpha = (lastTheta + theta) / c2;
 	int m2s = motor2speed((left + right) / c2) * dt;
 	homeX += (m2s * Sin(alpha / c1000)) / cmillion;
 	homeY += (m2s * Cos(alpha / c1000)) / cmillion;
-	
-	if (i++ % 50 == 0) {
-		clear();
-		print_long(theta / c1000);
-		lcd_goto_xy(4, 0);
-		//print_long(homeX);
-		lcd_goto_xy(4, 1);
-		//print_long(homeY);
-	}
 	
 	lastTheta = theta;
 }
@@ -170,9 +155,9 @@ inline int arcCos(long side, long dist) {
 void goHome() {
 	//these values appear to be 4 times larger than what they should be...
 	//adjusting the constants screwed up all the other calculations...so adjust here.
-	homeX /= 4;
+	homeX /=5;
 	homeX -= (robot_width / 10);
-	homeY /= 4;
+	homeY /= 5;
 	homeY -= (robot_width / 10);
 	theta /= 1000;
 	theta = (long)(theta * ((double)95/100));
@@ -186,40 +171,41 @@ void goHome() {
 	lcd_goto_xy(0, 1);
 	print("home!");
 	
-	//clean up our theta
-	theta -= (firstTheta / 1000);
-	
 	//how far we have to go to get home (hypot)
 	long dist = sqrt((homeX*homeX) + (homeY*homeY)); //pow() doesn't work?
 	
 	int thetaToHome;
-	int dir;
-	int angle;
+	int dir = 1;
+	int alpha = arcCos(abs(homeX), dist);
 	int q;
-	//let's pick quadrants!
-	if (homeX > 0 && homeY > 0) { //Quadrant 1
-		dir = -1;
-		q = 1;
-		angle = arcCos(homeY, dist);
-		thetaToHome = -theta - 90 - angle;
-	} else if (homeX < 0 && homeY > 0) { //Quadrant 2
+	
+	/*
+	if (theta > 0) {
 		dir = 1;
-		q = 2;
-		angle = arcCos(-homeX, dist); //fake that we're in Q.1
-		thetaToHome = -theta + 90 + angle;
-	} else if (homeX < 0 && homeY < 0) { //Quadrant 3
-		dir = 1;
-		q = 3;
-		angle = arcCos(-homeY, dist);
-		thetaToHome = angle - theta;
-	} else { // if (homeX > 0 && homeY < 0) { //Quadrant 4
+		thetaToHome = 180 - theta + alpha;
+	} else {
 		dir = -1;
-		q = 4;
-		angle = arcCos(homeY, dist);
-		thetaToHome = -theta - angle;
-	}
+		thetaToHome = -180 - theta + alpha;
+	} 
 	
 	thetaToHome = abs(thetaToHome);
+	*/
+	
+	while (theta < 0) theta += 360;
+	while (alpha < 0) alpha += 360;
+	
+	if (alpha < theta) {
+		if (alpha > 180)
+			thetaToHome = alpha - 180;
+		else
+			thetaToHome = alpha + 180;
+	} else if (alpha > theta) {
+		thetaToHome = alpha - theta + 180;
+	} else {
+		thetaToHome = 180;
+	}
+	
+	while (thetaToHome < 0) thetaToHome += 360;
 	
 	//calculate the time we need to wait while turning
 	int wait = angle2time(thetaToHome);
@@ -227,7 +213,7 @@ void goHome() {
 	clear();
 	print_long(theta);
 	lcd_goto_xy(0, 1);
-	print_long(q);
+	print_long(thetaToHome);
 	lcd_goto_xy(4, 0);
 	print_long(homeX);
 	lcd_goto_xy(4, 1);
@@ -320,14 +306,14 @@ int main() {
 		//calc the derivative
 		deriv = prop - lastProp;
 		
+		//get a proportional speed
+		int propSpeed = (prop / 4) + (integ / 6000) + (deriv / 3);
+		
 		//if the robot has changed directions, clear the integral
 		if ((lastProp < 0 && prop > 0) || (prop < 0 && lastProp > 0))
 			integ = 0;
 		else
-			integ += prop;
-		
-		//get a proportional speed
-		int propSpeed = (prop / 4) + (integ / 6000) + (deriv / 3);
+			integ += propSpeed;
 		
 		//set our last run time
 		last = now;
@@ -356,11 +342,6 @@ int main() {
 		
 		//update our guestimate of the position of the robot
 		updatePosition(left, right, diff);
-
-		if (i < 1) {
-			firstTheta += theta;
-			i++; 
-		}
 
 		set_motors(left, right);
 		
