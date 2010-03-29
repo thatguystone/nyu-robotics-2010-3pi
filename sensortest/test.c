@@ -33,6 +33,15 @@ long lastTheta, alpha, theta;
 //if we are on the line, default to yes so that we follow from the start
 char seen = 1;
 
+int angle2time(int angle) {
+	//130°/sec @ speed 30
+	return (angle * c1000) / a130;
+}
+
+int distance2time(int distance) {
+	return (distance * c1000) / a95;
+}
+
 void update_bounds(const unsigned int *s, unsigned int *minv, unsigned int *maxv) {
 	int i;
 	for (i=0; i<5; i++) { 
