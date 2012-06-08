@@ -1,1 +1,0 @@
-void follow_segment();
